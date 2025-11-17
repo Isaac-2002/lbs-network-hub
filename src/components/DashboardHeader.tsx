@@ -1,5 +1,5 @@
-import { Link, useLocation } from "react-router-dom";
-import { GraduationCap, LayoutDashboard, Users, User, Settings } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { LayoutDashboard, Users, User, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -9,9 +9,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 export const DashboardHeader = () => {
   const location = useLocation();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
   
   const navItems = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -24,9 +32,11 @@ export const DashboardHeader = () => {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           <Link to="/dashboard" className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
-              <GraduationCap className="h-6 w-6 text-primary" />
-            </div>
+            <img 
+              src="/LBS.png" 
+              alt="LBS Logo" 
+              className="h-10 w-10 object-contain"
+            />
             <span className="text-2xl font-bold text-foreground">LBS Connect</span>
           </Link>
           
@@ -57,6 +67,11 @@ export const DashboardHeader = () => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48 bg-popover border-border/50">
+              {user && (
+                <div className="px-2 py-1.5 text-sm text-muted-foreground border-b border-border/50">
+                  {user.email}
+                </div>
+              )}
               <DropdownMenuItem asChild>
                 <Link to="/profile" className="cursor-pointer">
                   <User className="mr-2 h-4 w-4" />
@@ -70,8 +85,9 @@ export const DashboardHeader = () => {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive cursor-pointer">
-                Log out
+              <DropdownMenuItem onClick={handleSignOut} className="text-destructive cursor-pointer">
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign Out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

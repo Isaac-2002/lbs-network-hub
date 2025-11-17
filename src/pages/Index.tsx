@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { GraduationCap, Users, Target } from "lucide-react";
+import { GraduationCap, Users, FileText, Sparkles, Mail } from "lucide-react";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -48,37 +48,45 @@ const Index = () => {
           </div>
         </section>
 
-        {/* Features Section */}
+        {/* Steps Section */}
         <section className="border-t border-border/50 py-20">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+                How It Works
+              </h2>
+              <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                Get started in three simple steps
+              </p>
+            </div>
             <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
               <div className="text-center group">
                 <div className="h-16 w-16 rounded-2xl bg-primary/20 flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
-                  <Target className="h-8 w-8 text-primary" />
+                  <FileText className="h-8 w-8 text-primary" />
                 </div>
-                <h3 className="text-xl font-bold text-foreground mb-3">Smart Matching</h3>
+                <h3 className="text-xl font-bold text-foreground mb-3">Tell us what you are looking for</h3>
                 <p className="text-muted-foreground">
-                  Our algorithm connects you with people who share your interests and career goals
+                  Complete a quick onboarding process to share your interests, career goals, and what you're seeking in your network
                 </p>
               </div>
               
               <div className="text-center group">
                 <div className="h-16 w-16 rounded-2xl bg-accent/20 flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
-                  <Users className="h-8 w-8 text-accent" />
+                  <Sparkles className="h-8 w-8 text-accent" />
                 </div>
-                <h3 className="text-xl font-bold text-foreground mb-3">Weekly Connections</h3>
+                <h3 className="text-xl font-bold text-foreground mb-3">Smart matching</h3>
                 <p className="text-muted-foreground">
-                  Receive 3 curated matches every week delivered directly to your inbox
+                  Our AI-powered matching algorithm analyzes your profile and preferences to find the most relevant connections
                 </p>
               </div>
               
               <div className="text-center group">
                 <div className="h-16 w-16 rounded-2xl bg-chart-3/20 flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
-                  <GraduationCap className="h-8 w-8 text-chart-3" />
+                  <Mail className="h-8 w-8 text-chart-3" />
                 </div>
-                <h3 className="text-xl font-bold text-foreground mb-3">LBS Community</h3>
+                <h3 className="text-xl font-bold text-foreground mb-3">Weekly connections</h3>
                 <p className="text-muted-foreground">
-                  Connect exclusively within the trusted London Business School network
+                  Receive a weekly email with 3 carefully curated matches, making it easy to build meaningful relationships over time
                 </p>
               </div>
             </div>
