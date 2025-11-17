@@ -30,20 +30,10 @@ export const AuthDialog = ({ open, onOpenChange, defaultMode = 'signin' }: AuthD
 
   const { signUp, signIn } = useAuth()
 
-  const validateEmail = (email: string): boolean => {
-    return email.endsWith('@london.edu')
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setSuccess(false)
-
-    // Validate email domain
-    if (!validateEmail(email)) {
-      setError('Email must end with @london.edu')
-      return
-    }
 
     // Validate password
     if (password.length < 6) {
@@ -114,7 +104,7 @@ export const AuthDialog = ({ open, onOpenChange, defaultMode = 'signin' }: AuthD
           <DialogDescription>
             {mode === 'signin'
               ? 'Sign in to your LBS Connect account'
-              : 'Create a new account with your @london.edu email'}
+              : 'Create a new account with your email address'}
           </DialogDescription>
         </DialogHeader>
 
@@ -124,17 +114,12 @@ export const AuthDialog = ({ open, onOpenChange, defaultMode = 'signin' }: AuthD
             <Input
               id="email"
               type="email"
-              placeholder="your.name@london.edu"
+              placeholder="your.email@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               disabled={loading}
             />
-            {mode === 'signup' && (
-              <p className="text-xs text-muted-foreground">
-                Only @london.edu email addresses are allowed
-              </p>
-            )}
           </div>
 
           <div className="space-y-2">
