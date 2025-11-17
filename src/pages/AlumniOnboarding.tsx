@@ -34,7 +34,7 @@ const AlumniOnboarding = () => {
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [goal, setGoal] = useState("");
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
-  const [industryDescription, setIndustryDescription] = useState("");
+  const [reachOutAbout, setReachOutAbout] = useState("");
   const [sendMatches, setSendMatches] = useState(true);
   const [allowStudents, setAllowStudents] = useState(true);
   const [allowAlumni, setAllowAlumni] = useState(true);
@@ -68,7 +68,7 @@ const AlumniOnboarding = () => {
       case 1:
         return goal !== "";
       case 2:
-        return selectedIndustries.length > 0;
+        return selectedIndustries.length > 0 && reachOutAbout.trim() !== "";
       case 3:
         return true;
       default:
@@ -78,7 +78,7 @@ const AlumniOnboarding = () => {
 
   const getIndustryTitle = () => {
     if (goal === "expand") {
-      return "Which industry are you in?";
+      return "What fields are you interested in?";
     } else if (goal === "pivot") {
       return "Which industry are you targeting?";
     } else if (goal === "give-back") {
@@ -207,12 +207,20 @@ const AlumniOnboarding = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="industry-description">Tell us more (Optional)</Label>
+                <Label htmlFor="reach-out-about">
+                  {goal === "give-back" 
+                    ? "What can students and alumni reach out to you about?"
+                    : "Tell us what you'd like to discuss"}
+                </Label>
                 <Textarea
-                  id="industry-description"
-                  value={industryDescription}
-                  onChange={(e) => setIndustryDescription(e.target.value)}
-                  placeholder="Share more details about your industry focus or what you're looking for..."
+                  id="reach-out-about"
+                  value={reachOutAbout}
+                  onChange={(e) => setReachOutAbout(e.target.value)}
+                  placeholder={
+                    goal === "give-back"
+                      ? "Share what topics, questions, or areas students and alumni can reach out to you about..."
+                      : "Share what you'd like to discuss with your network connections..."
+                  }
                   rows={4}
                 />
               </div>
