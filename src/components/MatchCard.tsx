@@ -14,14 +14,15 @@ interface MatchCardProps {
 
 export const MatchCard = ({ name, title, tags, sentDate, email, linkedin }: MatchCardProps) => {
   return (
-    <Card className="hover:shadow-lg transition-shadow">
-      <CardContent className="p-6">
+    <Card className="hover:scale-105 transition-all duration-300 group overflow-hidden relative">
+      <div className="absolute inset-0 bg-gradient-to-br from-accent/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+      <CardContent className="p-6 relative">
         <div className="flex items-start gap-4">
-          <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <User className="h-8 w-8 text-primary" />
+          <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0">
+            <User className="h-8 w-8 text-background" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-lg text-foreground mb-1">{name}</h3>
+            <h3 className="font-bold text-lg text-foreground mb-1">{name}</h3>
             <p className="text-sm text-muted-foreground mb-3">{title}</p>
             <div className="flex flex-wrap gap-2 mb-4">
               {tags.map((tag) => (

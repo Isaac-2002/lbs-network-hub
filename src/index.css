@@ -8,71 +8,44 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 20%;
+    --background: 0 0% 5%;
+    --foreground: 0 0% 98%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 20%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 20%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 214 100% 19%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 84 81% 63%;
+    --primary-foreground: 0 0% 5%;
 
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 20%;
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 40%;
+    --muted: 0 0% 20%;
+    --muted-foreground: 0 0% 60%;
 
-    --accent: 349 77% 42%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 28 100% 63%;
+    --accent-foreground: 0 0% 5%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 214 100% 19%;
+    --border: 0 0% 20%;
+    --input: 0 0% 15%;
+    --ring: 84 81% 63%;
 
-    --success: 134 61% 41%;
-    --success-foreground: 0 0% 100%;
+    --success: 84 81% 63%;
+    --success-foreground: 0 0% 5%;
 
-    --radius: 0.5rem;
-  }
-
-  .dark {
-    --background: 214 100% 19%;
-    --foreground: 0 0% 100%;
-
-    --card: 214 100% 22%;
-    --card-foreground: 0 0% 100%;
-
-    --popover: 214 100% 19%;
-    --popover-foreground: 0 0% 100%;
-
-    --primary: 0 0% 100%;
-    --primary-foreground: 214 100% 19%;
-
-    --secondary: 214 100% 25%;
-    --secondary-foreground: 0 0% 100%;
-
-    --muted: 214 100% 25%;
-    --muted-foreground: 0 0% 70%;
-
-    --accent: 349 77% 42%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 214 100% 30%;
-    --input: 214 100% 30%;
-    --ring: 0 0% 100%;
+    --radius: 1rem;
     
-    --success: 134 61% 41%;
-    --success-foreground: 0 0% 100%;
+    --chart-1: 84 81% 63%;
+    --chart-2: 28 100% 63%;
+    --chart-3: 280 80% 60%;
+    --chart-4: 200 80% 60%;
+    --chart-5: 340 75% 60%;
   }
 }
 
@@ -82,6 +55,11 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold tracking-tight;
   }
 }

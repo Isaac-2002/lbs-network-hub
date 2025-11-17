@@ -16,11 +16,11 @@ export const Tag = ({ label, selected = false, onToggle, onRemove, variant }: Ta
     <span
       onClick={onToggle}
       className={cn(
-        "inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all",
+        "inline-flex items-center gap-1 px-4 py-1.5 rounded-full text-xs font-semibold transition-all",
         isSelected
-          ? "bg-primary text-primary-foreground"
-          : "bg-secondary text-secondary-foreground hover:bg-primary/10",
-        onToggle && "cursor-pointer"
+          ? "bg-primary/20 text-primary border border-primary/30"
+          : "bg-secondary text-secondary-foreground hover:bg-secondary/70 border border-border/30",
+        onToggle && "cursor-pointer hover:scale-105"
       )}
     >
       {label}
