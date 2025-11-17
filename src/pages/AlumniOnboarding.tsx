@@ -10,6 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { TrendingUp, RefreshCw, Heart } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
 
 const STEPS = ["Upload CV", "Your Goals", "Industry Focus", "Consent"];
 
@@ -30,6 +33,8 @@ const INDUSTRIES = [
 
 const AlumniOnboarding = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(0);
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [goal, setGoal] = useState("");
@@ -38,12 +43,92 @@ const AlumniOnboarding = () => {
   const [sendMatches, setSendMatches] = useState(true);
   const [allowStudents, setAllowStudents] = useState(true);
   const [allowAlumni, setAllowAlumni] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentStep < STEPS.length - 1) {
       setCurrentStep(currentStep + 1);
     } else {
-      navigate("/welcome");
+      // Complete onboarding: upload CV and save profile
+      await handleCompleteOnboarding();
+    }
+  };
+
+  const handleCompleteOnboarding = async () => {
+    if (!user || !cvFile) {
+      toast({
+        title: "Error",
+        description: "Please make sure you're logged in and have uploaded a CV.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // 1. Upload CV to storage
+      const fileExt = cvFile.name.split(".").pop();
+      const filePath = `${user.id}/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("cvs")
+        .upload(filePath, cvFile, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw new Error(`Failed to upload CV: ${uploadError.message}`);
+      }
+
+      // 2. Update or insert profile
+      const profileData = {
+        user_type: "alumni" as const,
+        cv_path: filePath,
+        goal: goal || null,
+        selected_industries: selectedIndustries,
+        reach_out_about: reachOutAbout || null,
+        send_matches: sendMatches,
+        allow_students: allowStudents,
+        allow_alumni: allowAlumni,
+        email: user.email || null,
+      };
+
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .upsert(
+          {
+            id: user.id,
+            ...profileData,
+          },
+          {
+            onConflict: "id",
+          }
+        );
+
+      if (profileError) {
+        throw new Error(`Failed to save profile: ${profileError.message}`);
+      }
+
+      // 4. Store user type for "Update Your Status" button
+      localStorage.setItem("userType", "alumni");
+
+      toast({
+        title: "Success!",
+        description: "Your profile has been created successfully.",
+      });
+
+      navigate("/dashboard");
+    } catch (error) {
+      console.error("Error completing onboarding:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to complete onboarding. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -296,12 +381,16 @@ const AlumniOnboarding = () => {
             )}
             <Button
               onClick={handleNext}
-              disabled={!canProceed()}
+              disabled={!canProceed() || isSubmitting}
               className={currentStep === 0 ? "ml-auto" : ""}
               variant={currentStep === STEPS.length - 1 ? "default" : "default"}
               style={currentStep === STEPS.length - 1 ? { backgroundColor: "hsl(var(--accent))" } : {}}
             >
-              {currentStep === STEPS.length - 1 ? "Complete Setup" : "Next"}
+              {isSubmitting
+                ? "Saving..."
+                : currentStep === STEPS.length - 1
+                ? "Complete Setup"
+                : "Next"}
             </Button>
           </div>
         </div>

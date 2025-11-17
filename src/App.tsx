@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import Matches from "./pages/Matches";
+import UpdateStatus from "./pages/UpdateStatus";
 import NotFound from "./pages/NotFound";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { X, Mail } from "lucide-react";
@@ -107,6 +108,7 @@ const AppContent = () => (
         <Route path="/dashboard/matches" element={<Matches />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/update-status" element={<UpdateStatus />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>

@@ -1,19 +1,26 @@
+import { useNavigate } from "react-router-dom";
 import { DashboardHeader } from "@/components/DashboardHeader";
-import { StatCard } from "@/components/StatCard";
 import { MatchCard } from "@/components/MatchCard";
-import { Send, Users, Eye, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Tag } from "@/components/Tag";
+import { Edit, Search } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Dashboard = () => {
-  // Mock data
-  const stats = {
-    totalMatches: 12,
-    activeConnections: 8,
-    profileViews: 24,
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  // Mock profile data - in real app this would come from API/database
+  const profileData = {
+    name: "John Doe",
+    program: "MBA",
+    goal: "Expand my network in my current industry",
+    industries: ["Finance", "Technology", "Consulting"],
+    reachOutAbout: "Interested in discussing career transitions and networking opportunities in finance and technology sectors.",
   };
 
-  const recentMatches = [
+  const allMatches = [
     {
       name: "Sarah Johnson",
       title: "MBA '22 | Investment Banking at Goldman Sachs",
@@ -38,69 +45,109 @@ const Dashboard = () => {
       email: "emma.w@example.com",
       linkedin: "https://linkedin.com",
     },
+    {
+      name: "David Park",
+      title: "MiM '23 | Product Manager at Google",
+      tags: ["Technology", "Product"],
+      sentDate: "Jan 8, 2024",
+      email: "david.p@example.com",
+      linkedin: "https://linkedin.com",
+    },
+    {
+      name: "Lisa Anderson",
+      title: "MBA '20 | Partner at Bain & Company",
+      tags: ["Consulting", "Strategy"],
+      sentDate: "Jan 8, 2024",
+      email: "lisa.a@example.com",
+      linkedin: "https://linkedin.com",
+    },
+    {
+      name: "James Wright",
+      title: "EMBA '21 | VP of Operations at Amazon",
+      tags: ["Technology", "Operations"],
+      sentDate: "Jan 1, 2024",
+      email: "james.w@example.com",
+      linkedin: "https://linkedin.com",
+    },
   ];
+
+  const handleUpdateStatus = () => {
+    navigate("/update-status");
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <DashboardHeader />
       
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-3 tracking-tight">Welcome back, John!</h1>
-          <p className="text-lg text-muted-foreground">Here's your networking activity</p>
+        {/* Section 1: My Profile */}
+        <div className="mb-16">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground">
+                    Welcome back{user?.email ? `, ${user.email.split("@")[0]}` : ""}!
+                  </h2>
+                </div>
+                <Button onClick={handleUpdateStatus} variant="outline">
+                  <Edit className="h-4 w-4 mr-2" />
+                  Update Your Status
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Name</p>
+                <p className="font-medium text-foreground">{profileData.name}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Program</p>
+                <p className="font-medium text-foreground">{profileData.program}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Goal</p>
+                <p className="font-medium text-foreground">{profileData.goal}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Industries</p>
+                <div className="flex flex-wrap gap-2">
+                  {profileData.industries.map((industry) => (
+                    <Tag key={industry} label={industry} variant="selected" />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">What you'd like to discuss</p>
+                <p className="text-foreground">{profileData.reachOutAbout}</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
-          <StatCard
-            title="Total Matches Sent"
-            value={stats.totalMatches}
-            icon={Send}
-          />
-          <StatCard
-            title="Active Connections"
-            value={stats.activeConnections}
-            icon={Users}
-          />
-          <StatCard
-            title="Profile Views"
-            value={stats.profileViews}
-            icon={Eye}
-          />
-        </div>
-
-        {/* Recent Matches Section */}
-        <div className="mb-12">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-3xl font-bold text-foreground tracking-tight">Your Recent Matches</h2>
-            <Button variant="outline">View All</Button>
+        {/* Section 2: My Matches */}
+        <div>
+          {/* Search and Filters */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-8">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search matches by name or industry..."
+                className="pl-10"
+              />
+            </div>
+            <Button variant="outline">
+              Filter
+            </Button>
           </div>
+
+          {/* Matches Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {recentMatches.map((match, index) => (
+            {allMatches.map((match, index) => (
               <MatchCard key={index} {...match} />
             ))}
           </div>
         </div>
-
-        {/* Upcoming Section */}
-        <Card className="bg-gradient-to-br from-card to-secondary/30 border-border/50 overflow-hidden relative">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
-          <CardContent className="p-8 relative">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="h-14 w-14 rounded-2xl bg-primary/20 flex items-center justify-center">
-                <Calendar className="h-7 w-7 text-primary" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-foreground">Next matches arrive on Monday, Jan 22</h3>
-                <p className="text-sm text-muted-foreground">You'll receive 3 new connections in your inbox</p>
-              </div>
-            </div>
-            <div className="w-full bg-secondary/50 rounded-full h-3 backdrop-blur-sm">
-              <div className="bg-gradient-to-r from-primary to-accent h-3 rounded-full transition-all duration-500" style={{ width: "65%" }}></div>
-            </div>
-            <p className="text-xs text-muted-foreground mt-3">5 days until next batch</p>
-          </CardContent>
-        </Card>
       </main>
     </div>
   );

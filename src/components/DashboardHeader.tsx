@@ -23,8 +23,6 @@ export const DashboardHeader = () => {
   
   const navItems = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/dashboard/matches", label: "My Matches", icon: Users },
-    { to: "/profile", label: "Profile", icon: User },
   ];
 
   return (
@@ -41,21 +39,26 @@ export const DashboardHeader = () => {
           </Link>
           
           <nav className="hidden md:flex items-center gap-3">
-            {navItems.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={cn(
-                  "px-5 py-2.5 rounded-full text-sm font-medium transition-all flex items-center gap-2",
-                  location.pathname === item.to 
-                    ? "bg-secondary text-foreground" 
-                    : "text-muted-foreground hover:bg-secondary/50"
-                )}
-              >
-                <item.icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            ))}
+            {navItems
+              .filter((item) => 
+                !(location.pathname === "/dashboard" && item.to === "/dashboard") &&
+                !(location.pathname === "/update-status" && item.to === "/dashboard")
+              )
+              .map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={cn(
+                    "px-5 py-2.5 rounded-full text-sm font-medium transition-all flex items-center gap-2",
+                    location.pathname === item.to 
+                      ? "bg-secondary text-foreground" 
+                      : "text-muted-foreground hover:bg-secondary/50"
+                  )}
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              ))}
           </nav>
 
           <DropdownMenu>
@@ -73,9 +76,9 @@ export const DashboardHeader = () => {
                 </div>
               )}
               <DropdownMenuItem asChild>
-                <Link to="/profile" className="cursor-pointer">
-                  <User className="mr-2 h-4 w-4" />
-                  Profile
+                <Link to="/dashboard" className="cursor-pointer">
+                  <LayoutDashboard className="mr-2 h-4 w-4" />
+                  Dashboard
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
@@ -87,7 +90,7 @@ export const DashboardHeader = () => {
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut} className="text-destructive cursor-pointer">
                 <LogOut className="mr-2 h-4 w-4" />
-                Sign Out
+                Log Out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

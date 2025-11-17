@@ -8,23 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
 
 const STEPS = ["Upload CV", "Your Interests", "Consent"];
-
-const PROGRAMS = [
-  "MAM",
-  "MIM",
-  "MBA",
-  "MFA",
-];
 
 const INDUSTRIES = [
   "Finance",
@@ -39,21 +28,102 @@ const INDUSTRIES = [
 
 const StudentOnboarding = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(0);
   const [cvFile, setCvFile] = useState<File | null>(null);
-  const [program, setProgram] = useState("");
   const [postGraduationGoal, setPostGraduationGoal] = useState("");
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
   const [specificInterests, setSpecificInterests] = useState("");
   const [sendMatches, setSendMatches] = useState(true);
   const [connectWithStudents, setConnectWithStudents] = useState(true);
   const [connectWithAlumni, setConnectWithAlumni] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentStep < STEPS.length - 1) {
       setCurrentStep(currentStep + 1);
     } else {
-      navigate("/welcome");
+      // Complete onboarding: upload CV and save profile
+      await handleCompleteOnboarding();
+    }
+  };
+
+  const handleCompleteOnboarding = async () => {
+    if (!user || !cvFile) {
+      toast({
+        title: "Error",
+        description: "Please make sure you're logged in and have uploaded a CV.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // 1. Upload CV to storage
+      const fileExt = cvFile.name.split(".").pop();
+      const filePath = `${user.id}/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("cvs")
+        .upload(filePath, cvFile, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw new Error(`Failed to upload CV: ${uploadError.message}`);
+      }
+
+      // 2. Update or insert profile
+      const profileData = {
+        user_type: "student" as const,
+        cv_path: filePath,
+        post_graduation_goal: postGraduationGoal || null,
+        selected_industries: selectedIndustries,
+        specific_interests: specificInterests || null,
+        send_matches: sendMatches,
+        connect_with_students: connectWithStudents,
+        connect_with_alumni: connectWithAlumni,
+        email: user.email || null,
+      };
+
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .upsert(
+          {
+            id: user.id,
+            ...profileData,
+          },
+          {
+            onConflict: "id",
+          }
+        );
+
+      if (profileError) {
+        throw new Error(`Failed to save profile: ${profileError.message}`);
+      }
+
+      // 4. Store user type for "Update Your Status" button
+      localStorage.setItem("userType", "student");
+
+      toast({
+        title: "Success!",
+        description: "Your profile has been created successfully.",
+      });
+
+      navigate("/dashboard");
+    } catch (error) {
+      console.error("Error completing onboarding:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to complete onboarding. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -64,19 +134,12 @@ const StudentOnboarding = () => {
   };
 
   const toggleIndustry = (industry: string) => {
-    if (postGraduationGoal === "specific") {
-      // Single-select mode: if already selected, deselect; otherwise, replace selection
-      setSelectedIndustries((prev) =>
-        prev.includes(industry) ? [] : [industry]
-      );
-    } else {
-      // Multi-select mode: toggle the industry
-      setSelectedIndustries((prev) =>
-        prev.includes(industry)
-          ? prev.filter((i) => i !== industry)
-          : [...prev, industry]
-      );
-    }
+    // Multi-select mode: toggle the industry
+    setSelectedIndustries((prev) =>
+      prev.includes(industry)
+        ? prev.filter((i) => i !== industry)
+        : [...prev, industry]
+    );
   };
 
   const canProceed = () => {
@@ -84,8 +147,8 @@ const StudentOnboarding = () => {
       case 0:
         return cvFile !== null;
       case 1:
-        if (program === "" || postGraduationGoal === "") return false;
-        if ((postGraduationGoal === "exploring" || postGraduationGoal === "specific") && selectedIndustries.length === 0) return false;
+        if (postGraduationGoal === "") return false;
+        if (postGraduationGoal === "exploring" && selectedIndustries.length === 0) return false;
         return true;
       case 2:
         return true;
@@ -125,24 +188,7 @@ const StudentOnboarding = () => {
                 </p>
               </div>
 
-              {/* Question 1: Select your programme */}
-              <div className="space-y-2">
-                <Label htmlFor="program">Select your programme</Label>
-                <Select value={program} onValueChange={setProgram}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose your programme" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PROGRAMS.map((prog) => (
-                      <SelectItem key={prog} value={prog}>
-                        {prog}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Question 2: What are your post-graduation goals? */}
+              {/* Question 1: What are your post-graduation goals? */}
               <div className="space-y-4">
                 <Label>What are your post-graduation goals?</Label>
                 <RadioGroup 
@@ -157,36 +203,12 @@ const StudentOnboarding = () => {
                     <div className="flex items-center space-x-2 p-4 border rounded-lg hover:border-primary transition-colors">
                       <RadioGroupItem value="exploring" id="exploring" />
                       <Label htmlFor="exploring" className="cursor-pointer flex-1">
-                        Exploring multiple industries
+                        Select industries
                       </Label>
                     </div>
                     {postGraduationGoal === "exploring" && (
                       <div className="ml-8 space-y-2">
                         <Label>Select industries</Label>
-                        <div className="flex flex-wrap gap-2 p-4 bg-secondary rounded-lg">
-                          {INDUSTRIES.map((industry) => (
-                            <Tag
-                              key={industry}
-                              label={industry}
-                              selected={selectedIndustries.includes(industry)}
-                              onToggle={() => toggleIndustry(industry)}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2 p-4 border rounded-lg hover:border-primary transition-colors">
-                      <RadioGroupItem value="specific" id="specific" />
-                      <Label htmlFor="specific" className="cursor-pointer flex-1">
-                        Targeting specific industries
-                      </Label>
-                    </div>
-                    {postGraduationGoal === "specific" && (
-                      <div className="ml-8 space-y-2">
-                        <Label>Select industry</Label>
                         <div className="flex flex-wrap gap-2 p-4 bg-secondary rounded-lg">
                           {INDUSTRIES.map((industry) => (
                             <Tag
@@ -216,7 +238,7 @@ const StudentOnboarding = () => {
                 </RadioGroup>
               </div>
 
-              {/* Question 3: Any specific interests? */}
+              {/* Question 2: Any specific interests? */}
               <div className="space-y-2">
                 <Label htmlFor="specific-interests">Any specific interests?</Label>
                 <Textarea
@@ -300,12 +322,16 @@ const StudentOnboarding = () => {
             )}
             <Button
               onClick={handleNext}
-              disabled={!canProceed()}
+              disabled={!canProceed() || isSubmitting}
               className={currentStep === 0 ? "ml-auto" : ""}
               variant={currentStep === STEPS.length - 1 ? "default" : "default"}
               style={currentStep === STEPS.length - 1 ? { backgroundColor: "hsl(var(--accent))" } : {}}
             >
-              {currentStep === STEPS.length - 1 ? "Complete Setup" : "Next"}
+              {isSubmitting
+                ? "Saving..."
+                : currentStep === STEPS.length - 1
+                ? "Complete Setup"
+                : "Next"}
             </Button>
           </div>
         </div>
