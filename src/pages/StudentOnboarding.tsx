@@ -5,7 +5,6 @@ import { ProgressBar } from "@/components/ProgressBar";
 import { FileUpload } from "@/components/FileUpload";
 import { Tag } from "@/components/Tag";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,29 +17,13 @@ import {
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
-const STEPS = ["Upload CV", "Your Interests", "Career Goals", "Consent"];
+const STEPS = ["Upload CV", "Your Interests", "Consent"];
 
 const PROGRAMS = [
-  "Masters in Management",
-  "Masters in Finance",
-  "Masters in Analytics",
+  "MAM",
+  "MIM",
   "MBA",
-  "Other",
-];
-
-const INTERESTS = [
-  "Finance",
-  "Consulting",
-  "Technology",
-  "Entrepreneurship",
-  "Marketing",
-  "Operations",
-  "Healthcare",
-  "Real Estate",
-  "Private Equity",
-  "Venture Capital",
-  "Sustainability",
-  "Non-Profit",
+  "MFA",
 ];
 
 const INDUSTRIES = [
@@ -59,14 +42,10 @@ const StudentOnboarding = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [program, setProgram] = useState("");
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
-  const [customInterest, setCustomInterest] = useState("");
+  const [postGraduationGoal, setPostGraduationGoal] = useState("");
+  const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
   const [specificInterests, setSpecificInterests] = useState("");
-  const [careerGoal, setCareerGoal] = useState("");
-  const [targetIndustries, setTargetIndustries] = useState<string[]>([]);
-  const [goalsDescription, setGoalsDescription] = useState("");
   const [sendMatches, setSendMatches] = useState(true);
-  const [allowMatching, setAllowMatching] = useState(true);
   const [connectWithStudents, setConnectWithStudents] = useState(true);
   const [connectWithAlumni, setConnectWithAlumni] = useState(true);
 
@@ -84,18 +63,19 @@ const StudentOnboarding = () => {
     }
   };
 
-  const toggleInterest = (interest: string) => {
-    setSelectedInterests((prev) =>
-      prev.includes(interest)
-        ? prev.filter((i) => i !== interest)
-        : [...prev, interest]
-    );
-  };
-
-  const addCustomInterest = () => {
-    if (customInterest.trim() && !selectedInterests.includes(customInterest.trim())) {
-      setSelectedInterests([...selectedInterests, customInterest.trim()]);
-      setCustomInterest("");
+  const toggleIndustry = (industry: string) => {
+    if (postGraduationGoal === "specific") {
+      // Single-select mode: if already selected, deselect; otherwise, replace selection
+      setSelectedIndustries((prev) =>
+        prev.includes(industry) ? [] : [industry]
+      );
+    } else {
+      // Multi-select mode: toggle the industry
+      setSelectedIndustries((prev) =>
+        prev.includes(industry)
+          ? prev.filter((i) => i !== industry)
+          : [...prev, industry]
+      );
     }
   };
 
@@ -104,10 +84,10 @@ const StudentOnboarding = () => {
       case 0:
         return cvFile !== null;
       case 1:
-        return selectedInterests.length > 0 && program !== "";
+        if (program === "" || postGraduationGoal === "") return false;
+        if ((postGraduationGoal === "exploring" || postGraduationGoal === "specific") && selectedIndustries.length === 0) return false;
+        return true;
       case 2:
-        return careerGoal !== "";
-      case 3:
         return true;
       default:
         return false;
@@ -135,21 +115,22 @@ const StudentOnboarding = () => {
             </div>
           )}
 
-          {/* Step 2: Program & Interests */}
+          {/* Step 2: Your Interests */}
           {currentStep === 1 && (
             <div className="space-y-6">
               <div>
-                <h2 className="text-3xl font-bold text-primary mb-2">Tell us about yourself</h2>
+                <h2 className="text-3xl font-bold text-primary mb-2">Your Interests</h2>
                 <p className="text-muted-foreground">
-                  Help us understand your background and interests
+                  Help us understand your background and career goals
                 </p>
               </div>
 
+              {/* Question 1: Select your programme */}
               <div className="space-y-2">
-                <Label htmlFor="program">Select your program</Label>
+                <Label htmlFor="program">Select your programme</Label>
                 <Select value={program} onValueChange={setProgram}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose your program" />
+                    <SelectValue placeholder="Choose your programme" />
                   </SelectTrigger>
                   <SelectContent>
                     {PROGRAMS.map((prog) => (
@@ -161,121 +142,96 @@ const StudentOnboarding = () => {
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label>What are your areas of interest?</Label>
-                <div className="flex flex-wrap gap-2 p-4 bg-secondary rounded-lg">
-                  {INTERESTS.map((interest) => (
-                    <Tag
-                      key={interest}
-                      label={interest}
-                      selected={selectedInterests.includes(interest)}
-                      onToggle={() => toggleInterest(interest)}
-                    />
-                  ))}
-                </div>
+              {/* Question 2: What are your post-graduation goals? */}
+              <div className="space-y-4">
+                <Label>What are your post-graduation goals?</Label>
+                <RadioGroup 
+                  value={postGraduationGoal} 
+                  onValueChange={(value) => {
+                    setPostGraduationGoal(value);
+                    // Clear industry selection when changing goals
+                    setSelectedIndustries([]);
+                  }}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2 p-4 border rounded-lg hover:border-primary transition-colors">
+                      <RadioGroupItem value="exploring" id="exploring" />
+                      <Label htmlFor="exploring" className="cursor-pointer flex-1">
+                        Exploring multiple industries
+                      </Label>
+                    </div>
+                    {postGraduationGoal === "exploring" && (
+                      <div className="ml-8 space-y-2">
+                        <Label>Select industries</Label>
+                        <div className="flex flex-wrap gap-2 p-4 bg-secondary rounded-lg">
+                          {INDUSTRIES.map((industry) => (
+                            <Tag
+                              key={industry}
+                              label={industry}
+                              selected={selectedIndustries.includes(industry)}
+                              onToggle={() => toggleIndustry(industry)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2 p-4 border rounded-lg hover:border-primary transition-colors">
+                      <RadioGroupItem value="specific" id="specific" />
+                      <Label htmlFor="specific" className="cursor-pointer flex-1">
+                        Targeting specific industries
+                      </Label>
+                    </div>
+                    {postGraduationGoal === "specific" && (
+                      <div className="ml-8 space-y-2">
+                        <Label>Select industry</Label>
+                        <div className="flex flex-wrap gap-2 p-4 bg-secondary rounded-lg">
+                          {INDUSTRIES.map((industry) => (
+                            <Tag
+                              key={industry}
+                              label={industry}
+                              selected={selectedIndustries.includes(industry)}
+                              onToggle={() => toggleIndustry(industry)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center space-x-2 p-4 border rounded-lg hover:border-primary transition-colors">
+                    <RadioGroupItem value="venture" id="venture" />
+                    <Label htmlFor="venture" className="cursor-pointer flex-1">
+                      Starting my own venture
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2 p-4 border rounded-lg hover:border-primary transition-colors">
+                    <RadioGroupItem value="figuring-out" id="figuring-out" />
+                    <Label htmlFor="figuring-out" className="cursor-pointer flex-1">
+                      Still figuring out
+                    </Label>
+                  </div>
+                </RadioGroup>
               </div>
 
+              {/* Question 3: Any specific interests? */}
               <div className="space-y-2">
-                <Label htmlFor="custom-interest">Add custom interest</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="custom-interest"
-                    value={customInterest}
-                    onChange={(e) => setCustomInterest(e.target.value)}
-                    placeholder="e.g., fintech, impact investing..."
-                    onKeyPress={(e) => e.key === "Enter" && addCustomInterest()}
-                  />
-                  <Button type="button" onClick={addCustomInterest}>Add</Button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="specific-interests">Any specific interests or niches? (Optional)</Label>
+                <Label htmlFor="specific-interests">Any specific interests?</Label>
                 <Textarea
                   id="specific-interests"
                   value={specificInterests}
                   onChange={(e) => setSpecificInterests(e.target.value)}
-                  placeholder="e.g., fintech, impact investing, B2B SaaS..."
-                  rows={3}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Career Goals */}
-          {currentStep === 2 && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-3xl font-bold text-primary mb-2">What are your post-graduation goals?</h2>
-                <p className="text-muted-foreground">
-                  Share your career aspirations with us
-                </p>
-              </div>
-
-              <RadioGroup value={careerGoal} onValueChange={setCareerGoal}>
-                <div className="flex items-center space-x-2 p-4 border rounded-lg hover:border-primary transition-colors">
-                  <RadioGroupItem value="exploring" id="exploring" />
-                  <Label htmlFor="exploring" className="cursor-pointer flex-1">
-                    Exploring multiple industries
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2 p-4 border rounded-lg hover:border-primary transition-colors">
-                  <RadioGroupItem value="specific" id="specific" />
-                  <Label htmlFor="specific" className="cursor-pointer flex-1">
-                    Targeting specific industry
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2 p-4 border rounded-lg hover:border-primary transition-colors">
-                  <RadioGroupItem value="entrepreneurship" id="entrepreneurship" />
-                  <Label htmlFor="entrepreneurship" className="cursor-pointer flex-1">
-                    Entrepreneurship/Starting my own venture
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2 p-4 border rounded-lg hover:border-primary transition-colors">
-                  <RadioGroupItem value="figuring-out" id="figuring-out" />
-                  <Label htmlFor="figuring-out" className="cursor-pointer flex-1">
-                    Still figuring it out
-                  </Label>
-                </div>
-              </RadioGroup>
-
-              {careerGoal === "specific" && (
-                <div className="space-y-2">
-                  <Label>Select target industries</Label>
-                  <div className="flex flex-wrap gap-2 p-4 bg-secondary rounded-lg">
-                    {INDUSTRIES.map((industry) => (
-                      <Tag
-                        key={industry}
-                        label={industry}
-                        selected={targetIndustries.includes(industry)}
-                        onToggle={() => {
-                          setTargetIndustries((prev) =>
-                            prev.includes(industry)
-                              ? prev.filter((i) => i !== industry)
-                              : [...prev, industry]
-                          );
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="goals-description">Tell us more about your goals (Optional)</Label>
-                <Textarea
-                  id="goals-description"
-                  value={goalsDescription}
-                  onChange={(e) => setGoalsDescription(e.target.value)}
-                  placeholder="Share 2-3 sentences about your career aspirations..."
+                  placeholder="Share any specific interests or areas you'd like to explore..."
                   rows={4}
                 />
               </div>
             </div>
           )}
 
-          {/* Step 4: Consent */}
-          {currentStep === 3 && (
+          {/* Step 3: Consent */}
+          {currentStep === 2 && (
             <div className="space-y-6">
               <div>
                 <h2 className="text-3xl font-bold text-primary mb-2">How would you like to participate?</h2>
@@ -294,19 +250,6 @@ const StudentOnboarding = () => {
                   <div className="flex-1">
                     <Label htmlFor="send-matches" className="cursor-pointer">
                       Send me 3 networking matches every week via email
-                    </Label>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-3">
-                  <Checkbox
-                    id="allow-matching"
-                    checked={allowMatching}
-                    onCheckedChange={(checked) => setAllowMatching(checked as boolean)}
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="allow-matching" className="cursor-pointer">
-                      Allow others to be matched with me
                     </Label>
                   </div>
                 </div>
@@ -341,6 +284,7 @@ const StudentOnboarding = () => {
               <div className="p-4 bg-muted/50 rounded-lg border border-border">
                 <p className="text-sm text-muted-foreground">
                   Your email and LinkedIn will be extracted from your CV and used for matches.
+                  By signing up for this service, you allow others to be matched with you.
                   We respect your privacy and you can update these preferences anytime in settings.
                 </p>
               </div>

@@ -42,7 +42,7 @@ const Index = () => {
                 onClick={() => navigate("/onboarding/alumni")}
               >
                 <Users className="mr-2 h-5 w-5" />
-                I'm an Alumni
+                I'm an Alumn
               </Button>
             </div>
           </div>

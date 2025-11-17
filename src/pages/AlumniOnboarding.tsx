@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { TrendingUp, RefreshCw } from "lucide-react";
+import { TrendingUp, RefreshCw, Heart } from "lucide-react";
 
 const STEPS = ["Upload CV", "Your Goals", "Industry Focus", "Consent"];
 
@@ -81,6 +81,8 @@ const AlumniOnboarding = () => {
       return "Which industry are you in?";
     } else if (goal === "pivot") {
       return "Which industry are you targeting?";
+    } else if (goal === "give-back") {
+      return "Which industries are you interested in?";
     }
     return "Select Industries";
   };
@@ -153,6 +155,26 @@ const AlumniOnboarding = () => {
                     </div>
                     <p className="text-sm text-muted-foreground">
                       Build connections in a new field as you transition your career
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  className={`flex items-start space-x-4 p-6 border-2 rounded-lg cursor-pointer transition-all ${
+                    goal === "give-back" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                  }`}
+                  onClick={() => setGoal("give-back")}
+                >
+                  <RadioGroupItem value="give-back" id="give-back" className="mt-1" />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Heart className="h-5 w-5 text-primary" />
+                      <Label htmlFor="give-back" className="text-lg font-semibold cursor-pointer">
+                        I want to give back to the LBS community
+                      </Label>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Share your experience and mentor the next generation of LBS leaders
                     </p>
                   </div>
                 </div>
