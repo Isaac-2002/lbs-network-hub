@@ -37,12 +37,12 @@ const AlumniOnboarding = () => {
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(0);
   const [cvFile, setCvFile] = useState<File | null>(null);
-  const [goal, setGoal] = useState("");
+  const [networkingGoal, setNetworkingGoal] = useState("");
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
-  const [reachOutAbout, setReachOutAbout] = useState("");
-  const [sendMatches, setSendMatches] = useState(true);
-  const [allowStudents, setAllowStudents] = useState(true);
-  const [allowAlumni, setAllowAlumni] = useState(true);
+  const [specificInterests, setSpecificInterests] = useState("");
+  const [sendWeeklyUpdates, setSendWeeklyUpdates] = useState(true);
+  const [connectWithStudents, setConnectWithStudents] = useState(true);
+  const [connectWithAlumni, setConnectWithAlumni] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleNext = async () => {
@@ -82,41 +82,58 @@ const AlumniOnboarding = () => {
         throw new Error(`Failed to upload CV: ${uploadError.message}`);
       }
 
-      // 2. Update or insert profile
+      // 2. Create/update profile with user input data
       const profileData = {
+        user_id: user.id,
         user_type: "alumni" as const,
+        email: user.email || "",
         cv_path: filePath,
-        goal: goal || null,
-        selected_industries: selectedIndustries,
-        reach_out_about: reachOutAbout || null,
-        send_matches: sendMatches,
-        allow_students: allowStudents,
-        allow_alumni: allowAlumni,
-        email: user.email || null,
+        cv_uploaded_at: new Date().toISOString(),
+        networking_goal: networkingGoal,
+        target_industries: selectedIndustries,
+        specific_interests: specificInterests || null,
+        send_weekly_updates: sendWeeklyUpdates,
+        connect_with_students: connectWithStudents,
+        connect_with_alumni: connectWithAlumni,
+        onboarding_completed: true,
       };
 
       const { error: profileError } = await supabase
         .from("profiles")
-        .upsert(
-          {
-            id: user.id,
-            ...profileData,
-          },
-          {
-            onConflict: "id",
-          }
-        );
+        .upsert(profileData, {
+          onConflict: "user_id",
+        });
 
       if (profileError) {
         throw new Error(`Failed to save profile: ${profileError.message}`);
       }
 
-      // 4. Store user type for "Update Your Status" button
+      // 3. Trigger CV extraction (async - doesn't block onboarding completion)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        // Call edge function to extract CV data
+        supabase.functions
+          .invoke("extract-cv-data", {
+            body: {
+              userId: user.id,
+              cvPath: filePath,
+            },
+          })
+          .then(({ error: extractError }) => {
+            if (extractError) {
+              console.error("CV extraction error:", extractError);
+            } else {
+              console.log("CV extraction started successfully");
+            }
+          });
+      }
+
+      // 4. Store user type for dashboard
       localStorage.setItem("userType", "alumni");
 
       toast({
         title: "Success!",
-        description: "Your profile has been created successfully.",
+        description: "Your profile has been created. We're extracting data from your CV in the background.",
       });
 
       navigate("/dashboard");
@@ -151,9 +168,13 @@ const AlumniOnboarding = () => {
       case 0:
         return cvFile !== null;
       case 1:
-        return goal !== "";
+        return networkingGoal !== "";
       case 2:
-        return selectedIndustries.length > 0 && reachOutAbout.trim() !== "";
+        // For "give-back" goal, only require specificInterests, not industries
+        if (networkingGoal === "give-back") {
+          return specificInterests.trim() !== "";
+        }
+        return selectedIndustries.length > 0 && specificInterests.trim() !== "";
       case 3:
         return true;
       default:
@@ -162,11 +183,11 @@ const AlumniOnboarding = () => {
   };
 
   const getIndustryTitle = () => {
-    if (goal === "expand") {
+    if (networkingGoal === "expand") {
       return "What fields are you interested in?";
-    } else if (goal === "pivot") {
+    } else if (networkingGoal === "pivot") {
       return "Which industry are you targeting?";
-    } else if (goal === "give-back") {
+    } else if (networkingGoal === "give-back") {
       return "Which industries are you interested in?";
     }
     return "Select Industries";
@@ -197,18 +218,18 @@ const AlumniOnboarding = () => {
           {currentStep === 1 && (
             <div className="space-y-6">
               <div>
-                <h2 className="text-3xl font-bold text-primary mb-2">What brings you to LBS Connect?</h2>
+                <h2 className="text-3xl font-bold text-primary mb-2">What are your networking goals?</h2>
                 <p className="text-muted-foreground">
                   Help us understand your networking goals
                 </p>
               </div>
 
-              <RadioGroup value={goal} onValueChange={setGoal} className="space-y-4">
+              <RadioGroup value={networkingGoal} onValueChange={setNetworkingGoal} className="space-y-4">
                 <div
                   className={`flex items-start space-x-4 p-6 border-2 rounded-lg cursor-pointer transition-all ${
-                    goal === "expand" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                    networkingGoal === "expand" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
                   }`}
-                  onClick={() => setGoal("expand")}
+                  onClick={() => setNetworkingGoal("expand")}
                 >
                   <RadioGroupItem value="expand" id="expand" className="mt-1" />
                   <div className="flex-1">
@@ -226,9 +247,9 @@ const AlumniOnboarding = () => {
 
                 <div
                   className={`flex items-start space-x-4 p-6 border-2 rounded-lg cursor-pointer transition-all ${
-                    goal === "pivot" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                    networkingGoal === "pivot" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
                   }`}
-                  onClick={() => setGoal("pivot")}
+                  onClick={() => setNetworkingGoal("pivot")}
                 >
                   <RadioGroupItem value="pivot" id="pivot" className="mt-1" />
                   <div className="flex-1">
@@ -246,9 +267,9 @@ const AlumniOnboarding = () => {
 
                 <div
                   className={`flex items-start space-x-4 p-6 border-2 rounded-lg cursor-pointer transition-all ${
-                    goal === "give-back" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                    networkingGoal === "give-back" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
                   }`}
-                  onClick={() => setGoal("give-back")}
+                  onClick={() => setNetworkingGoal("give-back")}
                 >
                   <RadioGroupItem value="give-back" id="give-back" className="mt-1" />
                   <div className="flex-1">
@@ -273,36 +294,40 @@ const AlumniOnboarding = () => {
               <div>
                 <h2 className="text-3xl font-bold text-primary mb-2">{getIndustryTitle()}</h2>
                 <p className="text-muted-foreground">
-                  Select the industries you're interested in connecting within
+                  {networkingGoal === "give-back"
+                    ? "Tell us what you'd like to help with"
+                    : "Select the industries you're interested in connecting within"}
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <Label>Select industries</Label>
-                <div className="flex flex-wrap gap-2 p-4 bg-secondary rounded-lg">
-                  {INDUSTRIES.map((industry) => (
-                    <Tag
-                      key={industry}
-                      label={industry}
-                      selected={selectedIndustries.includes(industry)}
-                      onToggle={() => toggleIndustry(industry)}
-                    />
-                  ))}
+              {networkingGoal !== "give-back" && (
+                <div className="space-y-2">
+                  <Label>Select industries</Label>
+                  <div className="flex flex-wrap gap-2 p-4 bg-secondary rounded-lg">
+                    {INDUSTRIES.map((industry) => (
+                      <Tag
+                        key={industry}
+                        label={industry}
+                        selected={selectedIndustries.includes(industry)}
+                        onToggle={() => toggleIndustry(industry)}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="space-y-2">
-                <Label htmlFor="reach-out-about">
-                  {goal === "give-back" 
+                <Label htmlFor="specific-interests">
+                  {networkingGoal === "give-back" 
                     ? "What can students and alumni reach out to you about?"
                     : "Tell us what you'd like to discuss"}
                 </Label>
                 <Textarea
-                  id="reach-out-about"
-                  value={reachOutAbout}
-                  onChange={(e) => setReachOutAbout(e.target.value)}
+                  id="specific-interests"
+                  value={specificInterests}
+                  onChange={(e) => setSpecificInterests(e.target.value)}
                   placeholder={
-                    goal === "give-back"
+                    networkingGoal === "give-back"
                       ? "Share what topics, questions, or areas students and alumni can reach out to you about..."
                       : "Share what you'd like to discuss with your network connections..."
                   }
@@ -325,12 +350,12 @@ const AlumniOnboarding = () => {
               <div className="space-y-4 p-6 bg-secondary rounded-lg">
                 <div className="flex items-start space-x-3">
                   <Checkbox
-                    id="send-matches"
-                    checked={sendMatches}
-                    onCheckedChange={(checked) => setSendMatches(checked as boolean)}
+                    id="send-weekly-updates"
+                    checked={sendWeeklyUpdates}
+                    onCheckedChange={(checked) => setSendWeeklyUpdates(checked as boolean)}
                   />
                   <div className="flex-1">
-                    <Label htmlFor="send-matches" className="cursor-pointer">
+                    <Label htmlFor="send-weekly-updates" className="cursor-pointer">
                       Send me 3 networking matches every week via email
                     </Label>
                   </div>
@@ -338,12 +363,12 @@ const AlumniOnboarding = () => {
 
                 <div className="flex items-start space-x-3">
                   <Checkbox
-                    id="allow-students"
-                    checked={allowStudents}
-                    onCheckedChange={(checked) => setAllowStudents(checked as boolean)}
+                    id="connect-students"
+                    checked={connectWithStudents}
+                    onCheckedChange={(checked) => setConnectWithStudents(checked as boolean)}
                   />
                   <div className="flex-1">
-                    <Label htmlFor="allow-students" className="cursor-pointer">
+                    <Label htmlFor="connect-students" className="cursor-pointer">
                       Allow current students to be matched with me
                     </Label>
                   </div>
@@ -351,12 +376,12 @@ const AlumniOnboarding = () => {
 
                 <div className="flex items-start space-x-3">
                   <Checkbox
-                    id="allow-alumni"
-                    checked={allowAlumni}
-                    onCheckedChange={(checked) => setAllowAlumni(checked as boolean)}
+                    id="connect-alumni"
+                    checked={connectWithAlumni}
+                    onCheckedChange={(checked) => setConnectWithAlumni(checked as boolean)}
                   />
                   <div className="flex-1">
-                    <Label htmlFor="allow-alumni" className="cursor-pointer">
+                    <Label htmlFor="connect-alumni" className="cursor-pointer">
                       Allow other alumni to be matched with me
                     </Label>
                   </div>

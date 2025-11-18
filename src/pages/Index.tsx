@@ -3,9 +3,11 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { GraduationCap, Users, FileText, Sparkles, Mail } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Index = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -31,6 +33,7 @@ const Index = () => {
                 size="lg" 
                 className="text-lg flex-1"
                 onClick={() => navigate("/onboarding/student")}
+                disabled={!user}
               >
                 <GraduationCap className="mr-2 h-5 w-5" />
                 I'm a Current Student
@@ -40,11 +43,17 @@ const Index = () => {
                 variant="accent"
                 className="text-lg flex-1"
                 onClick={() => navigate("/onboarding/alumni")}
+                disabled={!user}
               >
                 <Users className="mr-2 h-5 w-5" />
                 I'm an Alumn
               </Button>
             </div>
+            {!user && (
+              <p className="text-sm text-muted-foreground mt-4 text-center">
+                Please log in to continue
+              </p>
+            )}
           </div>
         </section>
 

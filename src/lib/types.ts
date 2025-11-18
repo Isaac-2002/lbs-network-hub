@@ -2,45 +2,65 @@
 
 export type UserType = 'student' | 'alumni';
 
-export type PostGraduationGoal = 'exploring' | 'venture' | 'figuring-out';
+export type LBSProgram = 'MAM' | 'MIM' | 'MBA' | 'MFA';
 
-export type AlumniGoal = 'expand' | 'pivot' | 'give-back';
-
+// Complete Profile interface matching the 26-column database schema
 export interface Profile {
-  id: string; // UUID, references auth.users(id)
-  // Basic information
-  name: string | null;
-  email: string | null;
+  // System fields
+  id: string; // UUID
+  user_id: string; // UUID, references auth.users(id)
+  
+  // From Auth System
+  email: string;
+  
+  // From CV (LLM Extraction)
+  first_name: string | null;
+  last_name: string | null;
+  linkedin_url: string | null;
+  years_of_experience: number | null;
+  undergraduate_university: string | null;
+  languages: string[]; // Array of languages
+  current_location: string | null;
+  current_role: string | null;
+  current_company: string | null;
+  
+  // From User Input (Onboarding)
   user_type: UserType;
-  program: string | null;
-  
-  // CV storage reference
-  cv_path: string | null;
-  
-  // Student-specific fields
-  post_graduation_goal: PostGraduationGoal | null;
+  lbs_program: LBSProgram | null;
+  graduation_year: number | null;
+  networking_goal: string; // Required - describes user's networking objective
+  target_industries: string[]; // Required - array of industries
   specific_interests: string | null;
   connect_with_students: boolean;
   connect_with_alumni: boolean;
+  send_weekly_updates: boolean;
   
-  // Alumni-specific fields
-  goal: AlumniGoal | null;
-  reach_out_about: string | null;
-  allow_students: boolean;
-  allow_alumni: boolean;
-  
-  // Common fields
-  selected_industries: string[];
-  send_matches: boolean;
-  linkedin_url: string | null;
-  summary: string | null;
-  
-  // Timestamps
+  // System/Storage
+  cv_path: string | null;
+  cv_uploaded_at: string | null; // ISO timestamp
+  onboarding_completed: boolean;
   created_at: string; // ISO timestamp
   updated_at: string; // ISO timestamp
 }
 
-// Helper type for creating/updating profiles (all fields optional except user_type)
-export type ProfileInsert = Omit<Profile, 'id' | 'created_at' | 'updated_at'>;
-export type ProfileUpdate = Partial<Omit<Profile, 'id' | 'created_at'>>;
+// Helper types for creating/updating profiles
+export type ProfileInsert = Omit<Profile, 'id' | 'created_at' | 'updated_at'> & {
+  id?: string;
+};
 
+export type ProfileUpdate = Partial<Omit<Profile, 'id' | 'user_id' | 'created_at'>>;
+
+// Types for CV extraction
+export interface CVExtractionData {
+  first_name: string | null;
+  last_name: string | null;
+  linkedin_url: string | null;
+  years_of_experience: number | null;
+  undergraduate_university: string | null;
+  languages: string[];
+  current_location: string | null;
+  current_role: string | null;
+  current_company: string | null;
+  lbs_program: LBSProgram | null;
+  graduation_year: number | null;
+}

@@ -13,7 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 
-const STEPS = ["Upload CV", "Your Interests", "Consent"];
+const STEPS = ["Upload CV", "Your Networking Goal", "Consent"];
 
 const INDUSTRIES = [
   "Finance",
@@ -32,10 +32,10 @@ const StudentOnboarding = () => {
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(0);
   const [cvFile, setCvFile] = useState<File | null>(null);
-  const [postGraduationGoal, setPostGraduationGoal] = useState("");
+  const [networkingGoal, setNetworkingGoal] = useState("");
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
   const [specificInterests, setSpecificInterests] = useState("");
-  const [sendMatches, setSendMatches] = useState(true);
+  const [sendWeeklyUpdates, setSendWeeklyUpdates] = useState(true);
   const [connectWithStudents, setConnectWithStudents] = useState(true);
   const [connectWithAlumni, setConnectWithAlumni] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -77,41 +77,58 @@ const StudentOnboarding = () => {
         throw new Error(`Failed to upload CV: ${uploadError.message}`);
       }
 
-      // 2. Update or insert profile
+      // 2. Create/update profile with user input data
       const profileData = {
+        user_id: user.id,
         user_type: "student" as const,
+        email: user.email || "",
         cv_path: filePath,
-        post_graduation_goal: postGraduationGoal || null,
-        selected_industries: selectedIndustries,
+        cv_uploaded_at: new Date().toISOString(),
+        networking_goal: networkingGoal,
+        target_industries: selectedIndustries,
         specific_interests: specificInterests || null,
-        send_matches: sendMatches,
+        send_weekly_updates: sendWeeklyUpdates,
         connect_with_students: connectWithStudents,
         connect_with_alumni: connectWithAlumni,
-        email: user.email || null,
+        onboarding_completed: true,
       };
 
       const { error: profileError } = await supabase
         .from("profiles")
-        .upsert(
-          {
-            id: user.id,
-            ...profileData,
-          },
-          {
-            onConflict: "id",
-          }
-        );
+        .upsert(profileData, {
+          onConflict: "user_id",
+        });
 
       if (profileError) {
         throw new Error(`Failed to save profile: ${profileError.message}`);
       }
 
-      // 4. Store user type for "Update Your Status" button
+      // 3. Trigger CV extraction (async - doesn't block onboarding completion)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        // Call edge function to extract CV data
+        supabase.functions
+          .invoke("extract-cv-data", {
+            body: {
+              userId: user.id,
+              cvPath: filePath,
+            },
+          })
+          .then(({ error: extractError }) => {
+            if (extractError) {
+              console.error("CV extraction error:", extractError);
+            } else {
+              console.log("CV extraction started successfully");
+            }
+          });
+      }
+
+      // 4. Store user type for dashboard
       localStorage.setItem("userType", "student");
 
       toast({
         title: "Success!",
-        description: "Your profile has been created successfully.",
+        description: "Your profile has been created. We're extracting data from your CV in the background.",
       });
 
       navigate("/dashboard");
@@ -147,8 +164,8 @@ const StudentOnboarding = () => {
       case 0:
         return cvFile !== null;
       case 1:
-        if (postGraduationGoal === "") return false;
-        if (postGraduationGoal === "exploring" && selectedIndustries.length === 0) return false;
+        if (networkingGoal === "") return false;
+        if (networkingGoal === "exploring" && selectedIndustries.length === 0) return false;
         return true;
       case 2:
         return true;
@@ -178,23 +195,21 @@ const StudentOnboarding = () => {
             </div>
           )}
 
-          {/* Step 2: Your Interests */}
+          {/* Step 2: Your Networking Goal */}
           {currentStep === 1 && (
             <div className="space-y-6">
               <div>
-                <h2 className="text-3xl font-bold text-primary mb-2">Your Interests</h2>
+                <h2 className="text-3xl font-bold text-primary mb-2">What is your networking goal?</h2>
                 <p className="text-muted-foreground">
-                  Help us understand your background and career goals
+                  Help us understand your networking goals
                 </p>
               </div>
 
-              {/* Question 1: What are your post-graduation goals? */}
               <div className="space-y-4">
-                <Label>What are your post-graduation goals?</Label>
                 <RadioGroup 
-                  value={postGraduationGoal} 
+                  value={networkingGoal} 
                   onValueChange={(value) => {
-                    setPostGraduationGoal(value);
+                    setNetworkingGoal(value);
                     // Clear industry selection when changing goals
                     setSelectedIndustries([]);
                   }}
@@ -203,10 +218,10 @@ const StudentOnboarding = () => {
                     <div className="flex items-center space-x-2 p-4 border rounded-lg hover:border-primary transition-colors">
                       <RadioGroupItem value="exploring" id="exploring" />
                       <Label htmlFor="exploring" className="cursor-pointer flex-1">
-                        Select industries
+                        Exploring specific industries
                       </Label>
                     </div>
-                    {postGraduationGoal === "exploring" && (
+                    {networkingGoal === "exploring" && (
                       <div className="ml-8 space-y-2">
                         <Label>Select industries</Label>
                         <div className="flex flex-wrap gap-2 p-4 bg-secondary rounded-lg">
@@ -232,22 +247,10 @@ const StudentOnboarding = () => {
                   <div className="flex items-center space-x-2 p-4 border rounded-lg hover:border-primary transition-colors">
                     <RadioGroupItem value="figuring-out" id="figuring-out" />
                     <Label htmlFor="figuring-out" className="cursor-pointer flex-1">
-                      Still figuring out
+                      Still figuring it out
                     </Label>
                   </div>
                 </RadioGroup>
-              </div>
-
-              {/* Question 2: Any specific interests? */}
-              <div className="space-y-2">
-                <Label htmlFor="specific-interests">Any specific interests?</Label>
-                <Textarea
-                  id="specific-interests"
-                  value={specificInterests}
-                  onChange={(e) => setSpecificInterests(e.target.value)}
-                  placeholder="Share any specific interests or areas you'd like to explore..."
-                  rows={4}
-                />
               </div>
             </div>
           )}
@@ -265,12 +268,12 @@ const StudentOnboarding = () => {
               <div className="space-y-4 p-6 bg-secondary rounded-lg">
                 <div className="flex items-start space-x-3">
                   <Checkbox
-                    id="send-matches"
-                    checked={sendMatches}
-                    onCheckedChange={(checked) => setSendMatches(checked as boolean)}
+                    id="send-weekly-updates"
+                    checked={sendWeeklyUpdates}
+                    onCheckedChange={(checked) => setSendWeeklyUpdates(checked as boolean)}
                   />
                   <div className="flex-1">
-                    <Label htmlFor="send-matches" className="cursor-pointer">
+                    <Label htmlFor="send-weekly-updates" className="cursor-pointer">
                       Send me 3 networking matches every week via email
                     </Label>
                   </div>
