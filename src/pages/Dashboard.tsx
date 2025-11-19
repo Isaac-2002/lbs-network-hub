@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { MatchCard } from "@/components/MatchCard";
@@ -7,18 +8,60 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tag } from "@/components/Tag";
 import { Edit, Search } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { Profile } from "@/lib/types";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  // Mock profile data - in real app this would come from API/database
-  const profileData = {
-    name: "John Doe",
-    program: "MBA",
-    goal: "Expand my network in my current industry",
-    industries: ["Finance", "Technology", "Consulting"],
-    reachOutAbout: "Interested in discussing career transitions and networking opportunities in finance and technology sectors.",
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch profile data
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("user_id", user.id)
+          .single();
+
+        if (error) {
+          console.error("Error fetching profile:", error);
+        } else {
+          setProfile(data);
+        }
+      } catch (error) {
+        console.error("Error fetching profile:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, [user]);
+
+  // Helper function to format networking goal
+  const formatNetworkingGoal = (goal: string): string => {
+    const goalMap: Record<string, string> = {
+      exploring: "Exploring specific industries",
+      venture: "Starting my own venture",
+      "figuring-out": "Still figuring it out",
+      expand: "Expand my network in my current industry",
+      pivot: "I'm pivoting to a new industry",
+      "give-back": "I want to give back to the LBS community",
+    };
+    return goalMap[goal] || goal;
   };
+
+  // Get first name from profile
+  const firstName = profile?.first_name || user?.email?.split("@")[0] || "there";
 
   const allMatches = [
     {
@@ -75,6 +118,17 @@ const Dashboard = () => {
     navigate("/update-status");
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <DashboardHeader />
+        <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="text-center">Loading...</div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <DashboardHeader />
@@ -87,7 +141,7 @@ const Dashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold text-foreground">
-                    Welcome back{user?.email ? `, ${user.email.split("@")[0]}` : ""}!
+                    Welcome back, {firstName}!
                   </h2>
                 </div>
                 <Button onClick={handleUpdateStatus} variant="outline">
@@ -97,30 +151,36 @@ const Dashboard = () => {
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Name</p>
-                <p className="font-medium text-foreground">{profileData.name}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Program</p>
-                <p className="font-medium text-foreground">{profileData.program}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Goal</p>
-                <p className="font-medium text-foreground">{profileData.goal}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Industries</p>
-                <div className="flex flex-wrap gap-2">
-                  {profileData.industries.map((industry) => (
-                    <Tag key={industry} label={industry} variant="selected" />
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">What you'd like to discuss</p>
-                <p className="text-foreground">{profileData.reachOutAbout}</p>
-              </div>
+              {profile && (
+                <>
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Status</p>
+                    <p className="font-medium text-foreground capitalize">{profile.user_type}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Goal</p>
+                    <p className="font-medium text-foreground">
+                      {formatNetworkingGoal(profile.networking_goal)}
+                    </p>
+                  </div>
+                  {profile.target_industries && profile.target_industries.length > 0 && (
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Industries</p>
+                      <div className="flex flex-wrap gap-2">
+                        {profile.target_industries.map((industry) => (
+                          <Tag key={industry} label={industry} variant="selected" />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {profile.specific_interests && (
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">What you'd like to discuss</p>
+                      <p className="text-foreground">{profile.specific_interests}</p>
+                    </div>
+                  )}
+                </>
+              )}
             </CardContent>
           </Card>
         </div>

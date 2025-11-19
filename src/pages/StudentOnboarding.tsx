@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -28,7 +28,7 @@ const INDUSTRIES = [
 
 const StudentOnboarding = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(0);
   const [cvFile, setCvFile] = useState<File | null>(null);
@@ -39,6 +39,29 @@ const StudentOnboarding = () => {
   const [connectWithStudents, setConnectWithStudents] = useState(true);
   const [connectWithAlumni, setConnectWithAlumni] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Check if user has already completed onboarding and redirect to dashboard
+  useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      if (!user || loading) return;
+
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("onboarding_completed")
+          .eq("user_id", user.id)
+          .single();
+
+        if (!error && data?.onboarding_completed) {
+          navigate("/dashboard");
+        }
+      } catch (error) {
+        console.error("Error checking onboarding status:", error);
+      }
+    };
+
+    checkOnboardingStatus();
+  }, [user, loading, navigate]);
 
   const handleNext = async () => {
     if (currentStep < STEPS.length - 1) {
@@ -261,6 +284,17 @@ const StudentOnboarding = () => {
                     </Label>
                   </div>
                 </RadioGroup>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="specific-interests">Tell us what you'd like to discuss</Label>
+                <Textarea
+                  id="specific-interests"
+                  placeholder="e.g., Career transitions, industry insights, mentorship opportunities..."
+                  value={specificInterests}
+                  onChange={(e) => setSpecificInterests(e.target.value)}
+                  rows={4}
+                />
               </div>
             </div>
           )}

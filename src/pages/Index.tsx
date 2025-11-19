@@ -1,13 +1,38 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { GraduationCap, Users, FileText, Sparkles, Mail } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  // Check if user has completed onboarding and redirect to dashboard
+  useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      if (!user || loading) return;
+
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("onboarding_completed")
+          .eq("user_id", user.id)
+          .single();
+
+        if (!error && data?.onboarding_completed) {
+          navigate("/dashboard");
+        }
+      } catch (error) {
+        console.error("Error checking onboarding status:", error);
+      }
+    };
+
+    checkOnboardingStatus();
+  }, [user, loading, navigate]);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">

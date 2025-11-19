@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -33,7 +33,7 @@ const INDUSTRIES = [
 
 const AlumniOnboarding = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(0);
   const [cvFile, setCvFile] = useState<File | null>(null);
@@ -44,6 +44,29 @@ const AlumniOnboarding = () => {
   const [connectWithStudents, setConnectWithStudents] = useState(true);
   const [connectWithAlumni, setConnectWithAlumni] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Check if user has already completed onboarding and redirect to dashboard
+  useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      if (!user || loading) return;
+
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("onboarding_completed")
+          .eq("user_id", user.id)
+          .single();
+
+        if (!error && data?.onboarding_completed) {
+          navigate("/dashboard");
+        }
+      } catch (error) {
+        console.error("Error checking onboarding status:", error);
+      }
+    };
+
+    checkOnboardingStatus();
+  }, [user, loading, navigate]);
 
   const handleNext = async () => {
     if (currentStep < STEPS.length - 1) {
