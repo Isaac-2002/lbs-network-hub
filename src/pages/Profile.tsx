@@ -156,7 +156,7 @@ const Profile = () => {
             <Card>
               <CardContent className="p-6">
                 <h3 className="font-semibold text-lg text-foreground mb-4">Update CV</h3>
-                <FileUpload onFileSelect={(file) => console.log("New CV:", file)} />
+                <FileUpload onFileSelect={(file) => console.log("New CV:", file)} acceptedFormats=".pdf" />
               </CardContent>
             </Card>
 

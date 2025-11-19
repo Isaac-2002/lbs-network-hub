@@ -18,8 +18,6 @@ interface CVExtractionResult {
   current_location: string | null;
   current_role: string | null;
   current_company: string | null;
-  lbs_program: string | null; // MAM, MIM, MBA, MFA
-  graduation_year: number | null;
 }
 
 serve(async (req) => {
@@ -34,6 +32,11 @@ serve(async (req) => {
 
     if (!userId || !cvPath) {
       throw new Error("Missing required parameters: userId or cvPath");
+    }
+
+    // Validate PDF file
+    if (!cvPath.toLowerCase().endsWith('.pdf')) {
+      throw new Error("Only PDF files are supported");
     }
 
     // Initialize Supabase client
@@ -58,7 +61,7 @@ serve(async (req) => {
       throw new Error(`Failed to download CV: ${downloadError.message}`);
     }
 
-    // 2. Convert CV to base64 for OpenAI (supports PDF, DOCX, images)
+    // 2. Convert PDF to base64 for OpenAI PDF endpoint
     const arrayBuffer = await cvData.arrayBuffer();
     const base64Data = btoa(
       new Uint8Array(arrayBuffer).reduce(
@@ -67,45 +70,9 @@ serve(async (req) => {
       )
     );
 
-    // 3. Determine file type
-    const fileExtension = cvPath.split(".").pop()?.toLowerCase();
-    let mimeType = "application/pdf";
-    if (fileExtension === "docx") {
-      mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-    } else if (fileExtension === "doc") {
-      mimeType = "application/msword";
-    } else if (["jpg", "jpeg", "png"].includes(fileExtension || "")) {
-      mimeType = `image/${fileExtension}`;
-    }
+    console.log("PDF converted to base64, sending to OpenAI...");
 
-    // 4. Extract text from CV using OpenAI
-    // For PDFs and images, we'll use GPT-4 Vision or text extraction
-    // For now, we'll use a simpler approach with text extraction
-    
-    let cvText = "";
-    
-    // For PDFs, we need to extract text first (using a library or OCR)
-    // For simplicity, we'll assume text-based CVs or use OpenAI's file understanding
-    // In production, you might want to use pdf-parse or similar
-    
-    // For now, let's use OpenAI's chat completion with a document understanding prompt
-    // We'll send the file content in a way OpenAI can process
-    
-    // Note: For actual implementation, consider using:
-    // - pdf-parse for PDF text extraction
-    // - mammoth for DOCX text extraction
-    // - OpenAI Vision API for image-based CVs
-    
-    // Simplified approach: Convert to text and send to OpenAI
-    const textDecoder = new TextDecoder();
-    try {
-      cvText = textDecoder.decode(arrayBuffer);
-    } catch {
-      // If binary file, use a placeholder
-      cvText = "[Binary CV file - consider implementing OCR or document parsing]";
-    }
-
-    // 5. Call OpenAI API to extract structured data
+    // 3. Use OpenAI's PDF understanding capability with GPT-4o
     const openaiResponse = await fetch(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -119,29 +86,95 @@ serve(async (req) => {
           messages: [
             {
               role: "system",
-              content: `You are a CV data extraction assistant. Extract the following information from CVs and return it as a JSON object. If a field cannot be found, use null for strings/numbers and empty array for arrays. Be accurate and extract only explicitly stated information.
+              content: `You are an expert CV data extraction assistant. Your task is to carefully read a CV/resume and extract specific information.
 
-Required fields:
-- first_name: string (first name of the person)
-- last_name: string (last name of the person)
-- linkedin_url: string (LinkedIn profile URL)
-- years_of_experience: number (total years of work experience)
-- undergraduate_university: string (name of undergraduate university)
-- languages: string[] (array of languages spoken, e.g., ["English", "Spanish"])
-- current_location: string (current city/country)
-- current_role: string (current job title)
-- current_company: string (current employer)
-- lbs_program: string (London Business School program: MAM, MIM, MBA, or MFA only)
-- graduation_year: number (LBS graduation year or expected graduation year)
+EXTRACTION GUIDELINES:
 
-Return ONLY a valid JSON object with these exact field names. Do not include any explanation or additional text.`,
+1. **Name Extraction:**
+   - Look at the top of the CV (usually in header or first few lines)
+   - First name is typically the first word of the full name
+   - Last name is typically the last word of the full name
+   - Example: "John Michael Smith" → first_name: "John", last_name: "Smith"
+
+2. **LinkedIn URL:**
+   - Look for: "linkedin.com/in/...", "LinkedIn:", or LinkedIn icon
+   - Must be a complete URL starting with "linkedin.com" or "www.linkedin.com"
+   - If you find just a username, format it as: "linkedin.com/in/username"
+
+3. **Years of Experience:**
+   - Calculate from work history dates (subtract earliest start date from present/latest end date)
+   - Look for: "Experience", "Work History", "Professional Experience" sections
+   - Count only professional work experience, not internships or academic roles
+   - If dates are unclear, look for explicit statements like "5+ years of experience"
+
+4. **Undergraduate University:**
+   - Look in "Education" section
+   - Find the FIRST university degree (Bachelor's, BSc, BA, etc.)
+   - Extract full university name, not abbreviations
+   - Example: "University of California, Berkeley" not "UC Berkeley"
+   - Ignore: LBS (London Business School) - we need undergraduate institution
+
+5. **Languages:**
+   - Look for: "Languages", "Language Skills", or language proficiency mentions
+   - Extract language names only (not proficiency levels)
+   - Return as array: ["English", "Spanish", "Mandarin"]
+   - If proficiency is mentioned, only include languages with conversational level or higher
+
+6. **Current Location:**
+   - Look for: Address, "Location:", "Based in:", or city mentions near contact info
+   - Format as "City, Country" (e.g., "London, UK")
+   - If only city is mentioned, include it
+
+7. **Current Role:**
+   - Find the MOST RECENT job title in work experience
+   - Look at the top of the "Experience" section
+   - Extract exact title as written
+   - If currently studying, use "Student" or "Graduate Student"
+
+8. **Current Company:**
+   - Find the MOST RECENT employer in work experience
+   - Look at the top of the "Experience" section
+   - Extract full company name
+   - If currently studying, use "London Business School" or the university name
+
+IMPORTANT RULES:
+- If information is not explicitly stated, return null (not a guess)
+- Do not infer or assume information
+- Return empty array [] for languages if none are found
+- Double-check dates when calculating years of experience
+- Prioritize accuracy over completeness
+
+Return ONLY a valid JSON object with these exact field names:
+{
+  "first_name": string | null,
+  "last_name": string | null,
+  "linkedin_url": string | null,
+  "years_of_experience": number | null,
+  "undergraduate_university": string | null,
+  "languages": string[],
+  "current_location": string | null,
+  "current_role": string | null,
+  "current_company": string | null
+}`,
             },
             {
               role: "user",
-              content: `Extract data from this CV:\n\n${cvText.substring(0, 15000)}`,
+              content: [
+                {
+                  type: "text",
+                  text: "Please extract the required information from this CV/resume. Follow the extraction guidelines carefully and return only the JSON object.",
+                },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:application/pdf;base64,${base64Data}`,
+                  },
+                },
+              ],
             },
           ],
           temperature: 0.1,
+          max_tokens: 1000,
           response_format: { type: "json_object" },
         }),
       }
@@ -149,17 +182,34 @@ Return ONLY a valid JSON object with these exact field names. Do not include any
 
     if (!openaiResponse.ok) {
       const errorText = await openaiResponse.text();
+      console.error("OpenAI API error:", errorText);
       throw new Error(`OpenAI API error: ${errorText}`);
     }
 
     const openaiData = await openaiResponse.json();
+    
+    if (!openaiData.choices || !openaiData.choices[0]) {
+      throw new Error("Invalid response from OpenAI");
+    }
+
     const extractedData: CVExtractionResult = JSON.parse(
       openaiData.choices[0].message.content
     );
 
     console.log("Extracted data:", extractedData);
 
-    // 6. Update profile with extracted data
+    // 4. Validate extracted data
+    // Clean up LinkedIn URL if needed
+    if (extractedData.linkedin_url && !extractedData.linkedin_url.startsWith('http')) {
+      extractedData.linkedin_url = `https://${extractedData.linkedin_url}`;
+    }
+
+    // Ensure languages is an array
+    if (!Array.isArray(extractedData.languages)) {
+      extractedData.languages = [];
+    }
+
+    // 5. Update profile with extracted data
     const { error: updateError } = await supabase
       .from("profiles")
       .update({
@@ -168,12 +218,10 @@ Return ONLY a valid JSON object with these exact field names. Do not include any
         linkedin_url: extractedData.linkedin_url,
         years_of_experience: extractedData.years_of_experience,
         undergraduate_university: extractedData.undergraduate_university,
-        languages: extractedData.languages || [],
+        languages: extractedData.languages,
         current_location: extractedData.current_location,
         current_role: extractedData.current_role,
         current_company: extractedData.current_company,
-        lbs_program: extractedData.lbs_program,
-        graduation_year: extractedData.graduation_year,
       })
       .eq("user_id", userId);
 
@@ -188,6 +236,7 @@ Return ONLY a valid JSON object with these exact field names. Do not include any
       JSON.stringify({
         success: true,
         data: extractedData,
+        message: "CV data extracted and profile updated successfully"
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -208,4 +257,3 @@ Return ONLY a valid JSON object with these exact field names. Do not include any
     );
   }
 });
-

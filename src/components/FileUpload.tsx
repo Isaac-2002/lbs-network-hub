@@ -10,7 +10,7 @@ interface FileUploadProps {
 
 export const FileUpload = ({ 
   onFileSelect, 
-  acceptedFormats = ".pdf,.docx", 
+  acceptedFormats = ".pdf", 
   maxSizeMB = 5 
 }: FileUploadProps) => {
   const [dragActive, setDragActive] = useState(false);
@@ -26,11 +26,19 @@ export const FileUpload = ({
       return;
     }
 
-    // Check file type
+    // Check file extension
     const fileExtension = "." + file.name.split(".").pop()?.toLowerCase();
     if (!acceptedFormats.includes(fileExtension)) {
       setError(`Please upload a valid file format: ${acceptedFormats}`);
       return;
+    }
+
+    // For PDF files, also validate MIME type for better security
+    if (acceptedFormats.includes(".pdf") && fileExtension === ".pdf") {
+      if (file.type !== "application/pdf") {
+        setError("Please upload a valid PDF file");
+        return;
+      }
     }
 
     setSelectedFile(file);

@@ -64,11 +64,21 @@ const AlumniOnboarding = () => {
       return;
     }
 
+    // Validate that the file is a PDF
+    const fileExt = cvFile.name.split(".").pop()?.toLowerCase();
+    if (fileExt !== "pdf" || cvFile.type !== "application/pdf") {
+      toast({
+        title: "Error",
+        description: "Only PDF files are allowed for CV uploads.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
       // 1. Upload CV to storage
-      const fileExt = cvFile.name.split(".").pop();
       const filePath = `${user.id}/${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
@@ -210,7 +220,7 @@ const AlumniOnboarding = () => {
                   We'll extract your information to create your profile
                 </p>
               </div>
-              <FileUpload onFileSelect={setCvFile} />
+              <FileUpload onFileSelect={setCvFile} acceptedFormats=".pdf" />
             </div>
           )}
 
