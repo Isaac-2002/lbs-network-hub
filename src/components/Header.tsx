@@ -1,9 +1,10 @@
 import { Link, useNavigate } from "react-router-dom";
 import { User, LogOut, LayoutDashboard, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AuthDialog } from "@/components/AuthDialog";
+import { supabase } from "@/lib/supabase";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,19 +19,54 @@ interface HeaderProps {
 
 export const Header = ({ showAuth = true }: HeaderProps) => {
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const { user, signOut, loading } = useAuth();
   const navigate = useNavigate();
+
+  // Check if user has completed onboarding
+  useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      if (!user || loading) return;
+
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("onboarding_completed")
+          .eq("user_id", user.id)
+          .single();
+
+        if (!error && data?.onboarding_completed) {
+          setOnboardingCompleted(true);
+        }
+      } catch (error) {
+        console.error("Error checking onboarding status:", error);
+      }
+    };
+
+    checkOnboardingStatus();
+  }, [user, loading]);
 
   const handleSignOut = async () => {
     await signOut();
     navigate("/");
   };
 
+  const handleLogoClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (user && onboardingCompleted) {
+      e.preventDefault();
+      navigate("/dashboard");
+    }
+  };
+
   return (
     <header className="border-b border-border/50 bg-background/80 backdrop-blur-lg sticky top-0 z-50">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
-          <Link to="/" className="flex items-center gap-3">
+          <Link 
+            to={user && onboardingCompleted ? "/dashboard" : "/"} 
+            onClick={handleLogoClick}
+            className="flex items-center gap-3"
+          >
             <img 
               src="/LBS.png" 
               alt="LBS Logo" 

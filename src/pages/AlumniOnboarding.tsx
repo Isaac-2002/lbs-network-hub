@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { ProgressBar } from "@/components/ProgressBar";
 import { FileUpload } from "@/components/FileUpload";
@@ -33,6 +33,8 @@ const INDUSTRIES = [
 
 const AlumniOnboarding = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isUpdate = searchParams.get("update") === "true";
   const { user, loading } = useAuth();
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(0);
@@ -46,9 +48,10 @@ const AlumniOnboarding = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Check if user has already completed onboarding and redirect to dashboard
+  // Skip this check if user is updating their profile
   useEffect(() => {
     const checkOnboardingStatus = async () => {
-      if (!user || loading) return;
+      if (!user || loading || isUpdate) return;
 
       try {
         const { data, error } = await supabase
@@ -66,7 +69,7 @@ const AlumniOnboarding = () => {
     };
 
     checkOnboardingStatus();
-  }, [user, loading, navigate]);
+  }, [user, loading, navigate, isUpdate]);
 
   const handleNext = async () => {
     if (currentStep < STEPS.length - 1) {

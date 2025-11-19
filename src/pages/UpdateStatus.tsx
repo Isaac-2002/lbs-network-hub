@@ -9,13 +9,15 @@ const UpdateStatus = () => {
   const handleStudentClick = () => {
     // Clear any existing onboarding data to restart from beginning
     localStorage.removeItem("userType");
-    navigate("/onboarding/student");
+    // Pass update=true query parameter to allow re-onboarding
+    navigate("/onboarding/student?update=true");
   };
 
   const handleAlumniClick = () => {
     // Clear any existing onboarding data to restart from beginning
     localStorage.removeItem("userType");
-    navigate("/onboarding/alumni");
+    // Pass update=true query parameter to allow re-onboarding
+    navigate("/onboarding/alumni?update=true");
   };
 
   return (

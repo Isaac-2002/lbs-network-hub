@@ -16,6 +16,11 @@ export const DashboardHeader = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
 
+  const handleLogoClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    navigate("/dashboard");
+  };
+
   const handleSignOut = async () => {
     await signOut();
     navigate("/");
@@ -29,7 +34,11 @@ export const DashboardHeader = () => {
     <header className="border-b border-border/50 bg-background/80 backdrop-blur-lg sticky top-0 z-50">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
-          <Link to="/" className="flex items-center gap-3">
+          <Link 
+            to="/dashboard" 
+            onClick={handleLogoClick}
+            className="flex items-center gap-3"
+          >
             <img 
               src="/LBS.png" 
               alt="LBS Logo" 
