@@ -380,11 +380,134 @@ Return ONLY the JSON object, no additional text.`,
 
     console.log(`Successfully updated profile for user ${userId}`);
 
+    // 11. Fetch the complete profile to generate summary
+    console.log("Fetching complete profile for summary generation...");
+    const { data: profileData, error: profileError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
+
+    if (profileError) {
+      console.error("Failed to fetch profile:", profileError);
+      // Don't fail the entire operation, just log the error
+    } else if (profileData) {
+      console.log("Generating profile summary...");
+
+      // 12. Generate profile summary using OpenAI
+      try {
+        const summaryPrompt = `You are an expert at creating concise professional profile summaries for networking and career matching purposes.
+
+Given the following profile data, create a structured JSON summary that will be used to match this person with other professionals based on:
+- Shared career interests and goals
+- Complementary professional backgrounds
+- Industry alignment
+- Common educational backgrounds
+- Networking objectives
+
+Profile Data:
+- Name: ${profileData.first_name} ${profileData.last_name}
+- User Type: ${profileData.user_type} (${profileData.user_type === 'student' ? 'current student' : 'alumni'})
+- LBS Program: ${profileData.lbs_program || 'Not specified'} (Graduation: ${profileData.graduation_year || 'Not specified'})
+- Undergraduate: ${profileData.undergraduate_university || 'Not specified'}
+- Years of Experience: ${profileData.years_of_experience || 0}
+- Current Role: ${profileData.current_role || 'Not specified'} at ${profileData.current_company || 'Not specified'}
+- Location: ${profileData.current_location || 'Not specified'}
+- Languages: ${profileData.languages?.join(', ') || 'Not specified'}
+- Networking Goal: ${profileData.networking_goal || 'Not specified'}
+- Target Industries: ${profileData.target_industries?.join(', ') || 'Not specified'}
+- Specific Interests: ${profileData.specific_interests || 'Not specified'}
+
+Create a JSON object with the following structure:
+
+{
+  "professional_background": "A 2-3 sentence summary of their work experience and current role",
+  "education_summary": "A brief summary of their educational background including LBS program and undergraduate university",
+  "career_goals": "1-2 sentences about what they want to achieve professionally",
+  "target_industries": ["array", "of", "industries"],
+  "interests": "A concise summary of their specific interests and what they're passionate about",
+  "key_strengths": ["array", "of", "3-5", "notable", "skills or experiences"],
+  "languages": ["array", "of", "languages"],
+  "networking_purpose": "What they're looking for in professional connections (1 sentence)",
+  "match_keywords": ["array", "of", "10-15", "keywords", "for", "matching"]
+}
+
+Important:
+- Keep summaries concise and focused on information relevant for matching
+- Extract key themes and skills from their experience
+- Highlight what makes them unique or interesting for networking
+- Use the networking goal to understand what they're seeking
+- Generate match_keywords that include: industries, skills, interests, roles, and themes
+- Be specific and avoid generic statements
+
+Return ONLY the JSON object, no additional text.`;
+
+        const summaryResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${openaiApiKey}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o",
+            messages: [
+              {
+                role: "system",
+                content: "You are an expert at creating structured professional profile summaries for networking and matching purposes. Always return valid JSON only."
+              },
+              {
+                role: "user",
+                content: summaryPrompt
+              }
+            ],
+            temperature: 0.7,
+            max_tokens: 1000,
+          }),
+        });
+
+        if (!summaryResponse.ok) {
+          const error = await summaryResponse.text();
+          throw new Error(`Failed to generate summary: ${error}`);
+        }
+
+        const summaryResult = await summaryResponse.json();
+        let summaryText = summaryResult.choices[0].message.content.trim();
+
+        // Clean up markdown code blocks if present
+        summaryText = summaryText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+
+        const summaryJson = JSON.parse(summaryText);
+
+        console.log("Profile summary generated:", JSON.stringify(summaryJson, null, 2));
+
+        // 13. Store or update the profile summary
+        const { error: summaryError } = await supabase
+          .from("profile_summaries")
+          .upsert({
+            user_id: userId,
+            summary_json: summaryJson,
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'user_id'
+          });
+
+        if (summaryError) {
+          console.error("Failed to store profile summary:", summaryError);
+          // Don't fail the entire operation
+        } else {
+          console.log("Profile summary stored successfully");
+        }
+      } catch (summaryError) {
+        console.error("Error generating/storing profile summary:", summaryError);
+        // Don't fail the entire operation, profile update was successful
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         data: extractedData,
-        message: "CV data extracted and profile updated successfully",
+        message: "CV data extracted, profile updated, and summary generated successfully",
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
