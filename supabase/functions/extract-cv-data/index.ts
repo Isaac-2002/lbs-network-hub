@@ -1,4 +1,4 @@
-// Supabase Edge Function to extract data from CV using OpenAI
+// Supabase Edge Function to extract data from CV using OpenAI Assistants API
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 
@@ -18,33 +18,66 @@ interface CVExtractionResult {
   current_location: string | null;
   current_role: string | null;
   current_company: string | null;
+  lbs_program: string | null;
+  graduation_year: number | null;
+}
+
+// Helper function to poll for assistant run completion
+async function waitForRunCompletion(
+  threadId: string,
+  runId: string,
+  openaiApiKey: string
+): Promise<any> {
+  let attempts = 0;
+  const maxAttempts = 30; // 30 seconds max wait
+
+  while (attempts < maxAttempts) {
+    const response = await fetch(
+      `https://api.openai.com/v1/threads/${threadId}/runs/${runId}`,
+      {
+        headers: {
+          "Authorization": `Bearer ${openaiApiKey}`,
+          "OpenAI-Beta": "assistants=v2",
+        },
+      }
+    );
+
+    const run = await response.json();
+
+    if (run.status === "completed") {
+      return run;
+    } else if (run.status === "failed" || run.status === "cancelled" || run.status === "expired") {
+      throw new Error(`Run ${run.status}: ${run.last_error?.message || "Unknown error"}`);
+    }
+
+    // Wait 1 second before checking again
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    attempts++;
+  }
+
+  throw new Error("Assistant run timed out");
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // Get request body
     const { userId, cvPath } = await req.json();
 
     if (!userId || !cvPath) {
       throw new Error("Missing required parameters: userId or cvPath");
     }
 
-    // Validate PDF file
     if (!cvPath.toLowerCase().endsWith('.pdf')) {
       throw new Error("Only PDF files are supported");
     }
 
-    // Initialize Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get OpenAI API key
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
     if (!openaiApiKey) {
       throw new Error("OPENAI_API_KEY not configured");
@@ -61,90 +94,141 @@ serve(async (req) => {
       throw new Error(`Failed to download CV: ${downloadError.message}`);
     }
 
-    // 2. Convert PDF to base64 for OpenAI PDF endpoint
+    console.log("CV downloaded, uploading to OpenAI...");
+
+    // 2. Upload file to OpenAI
     const arrayBuffer = await cvData.arrayBuffer();
-    const base64Data = btoa(
-      new Uint8Array(arrayBuffer).reduce(
-        (data, byte) => data + String.fromCharCode(byte),
-        ""
-      )
-    );
+    const blob = new Blob([arrayBuffer], { type: "application/pdf" });
+    
+    const formData = new FormData();
+    formData.append("file", blob, "cv.pdf");
+    formData.append("purpose", "assistants");
 
-    console.log("PDF converted to base64, sending to OpenAI...");
+    const uploadResponse = await fetch("https://api.openai.com/v1/files", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${openaiApiKey}`,
+      },
+      body: formData,
+    });
 
-    // 3. Use OpenAI's PDF understanding capability with GPT-4o
-    const openaiResponse = await fetch(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${openaiApiKey}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          messages: [
-            {
-              role: "system",
-              content: `You are an expert CV data extraction assistant. Your task is to carefully read a CV/resume and extract specific information.
+    if (!uploadResponse.ok) {
+      const error = await uploadResponse.text();
+      throw new Error(`Failed to upload file to OpenAI: ${error}`);
+    }
 
-EXTRACTION GUIDELINES:
+    const fileData = await uploadResponse.json();
+    const fileId = fileData.id;
+    console.log(`File uploaded to OpenAI: ${fileId}`);
 
-1. **Name Extraction:**
-   - Look at the top of the CV (usually in header or first few lines)
-   - First name is typically the first word of the full name
-   - Last name is typically the last word of the full name
-   - Example: "John Michael Smith" → first_name: "John", last_name: "Smith"
+    // 3. Create Assistant with file search capability
+    const assistantResponse = await fetch("https://api.openai.com/v1/assistants", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${openaiApiKey}`,
+        "OpenAI-Beta": "assistants=v2",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        name: "CV Data Extractor",
+        instructions: `You are an expert CV/resume data extraction assistant. You will be given a CV/resume PDF file and must extract specific information accurately.
 
-2. **LinkedIn URL:**
-   - Look for: "linkedin.com/in/...", "LinkedIn:", or LinkedIn icon
-   - Must be a complete URL starting with "linkedin.com" or "www.linkedin.com"
-   - If you find just a username, format it as: "linkedin.com/in/username"
+CRITICAL EXTRACTION RULES:
 
-3. **Years of Experience:**
-   - Calculate from work history dates (subtract earliest start date from present/latest end date)
-   - Look for: "Experience", "Work History", "Professional Experience" sections
-   - Count only professional work experience, not internships or academic roles
-   - If dates are unclear, look for explicit statements like "5+ years of experience"
+**Name (MOST IMPORTANT - Read the EXACT name from the document):**
+- Look at the very top of the CV - the name is usually the largest text at the top
+- Extract the EXACT spelling as written - do not modify or assume
+- first_name: First word of the full name
+- last_name: Last word(s) of the full name
+- Example: "Isaac Hasbani" → first_name: "Isaac", last_name: "Hasbani"
+- If you see "Isaac Hasbani", the last name is "Hasbani" NOT "Ashbani" or any variation
 
-4. **Undergraduate University:**
-   - Look in "Education" section
-   - Find the FIRST university degree (Bachelor's, BSc, BA, etc.)
-   - Extract full university name, not abbreviations
-   - Example: "University of California, Berkeley" not "UC Berkeley"
-   - Ignore: LBS (London Business School) - we need undergraduate institution
+**LinkedIn URL:**
+- Look in the header/contact section (usually near email/phone)
+- Extract the FULL URL or username
+- Common formats: "LinkedIn", "linkedin.com/in/xxx", or just a hyperlink
+- If you see just "LinkedIn" as a link text, note that but return null if you can't find the actual URL
 
-5. **Languages:**
-   - Look for: "Languages", "Language Skills", or language proficiency mentions
-   - Extract language names only (not proficiency levels)
-   - Return as array: ["English", "Spanish", "Mandarin"]
-   - If proficiency is mentioned, only include languages with conversational level or higher
+**LBS Program (London Business School):**
+- Look in the Education section for "London Business School"
+- Extract the exact program name: "Master's in Analytics and Management" → "MAM"
+- Possible values: MAM, MIM, MBA, MFA
+- Match the program title to these codes:
+  - "Analytics and Management" or "Master's in Analytics and Management" → "MAM"
+  - "Management" or "Master in Management" → "MIM"
+  - "Master of Business Administration" or "MBA" → "MBA"
+  - "Master in Financial Analysis" or "MFA" → "MFA"
 
-6. **Current Location:**
-   - Look for: Address, "Location:", "Based in:", or city mentions near contact info
-   - Format as "City, Country" (e.g., "London, UK")
-   - If only city is mentioned, include it
+**Graduation Year (LBS):**
+- Look at the dates for London Business School education
+- Extract the END year (when they graduate/graduated)
+- Example: "2024 - 2025 London Business School" → graduation_year: 2025
 
-7. **Current Role:**
-   - Find the MOST RECENT job title in work experience
-   - Look at the top of the "Experience" section
-   - Extract exact title as written
-   - If currently studying, use "Student" or "Graduate Student"
+**Undergraduate University:**
+- Find the BACHELOR'S degree in Education section
+- Extract the full university name EXACTLY as written
+- Look for: "Bachelor", "BSc", "BA", "B.Eng", etc.
+- Example: "Università Commerciale Luigi Bocconi" (keep the exact spelling)
+- IGNORE: Master's degrees, London Business School, exchange programs
 
-8. **Current Company:**
-   - Find the MOST RECENT employer in work experience
-   - Look at the top of the "Experience" section
-   - Extract full company name
-   - If currently studying, use "London Business School" or the university name
+**Languages:**
+- Look for a "Languages" section (usually at the bottom)
+- Extract ONLY the language names as an array
+- Example: "Italian (native), English (fluent), French (fluent), Spanish (conversational)"
+  → languages: ["Italian", "English", "French", "Spanish"]
+- Include ALL languages mentioned, regardless of proficiency level
 
-IMPORTANT RULES:
-- If information is not explicitly stated, return null (not a guess)
-- Do not infer or assume information
-- Return empty array [] for languages if none are found
-- Double-check dates when calculating years of experience
-- Prioritize accuracy over completeness
+**Years of Experience:**
+- Look at the "Business Experience" or "Work Experience" section
+- Calculate: (Latest end date OR current year) - (Earliest start date)
+- Count internships and full-time roles
+- Example: Experience from 2023 to 2025 → 2 years
 
-Return ONLY a valid JSON object with these exact field names:
+**Current Location:**
+- Look in the header/contact section for address or location
+- Often near phone number and email
+- Format as "City, Country"
+
+**Current Role & Company:**
+- Find the MOST RECENT position (topmost in experience section)
+- Extract the exact job title and company name
+- If currently a student at LBS, role could be "Student" or the most recent role before studies
+
+IMPORTANT:
+- Read the PDF carefully - do not guess or make assumptions
+- If information is clearly stated, extract it exactly as written
+- If information is not found, return null
+- Pay special attention to spelling - extract names and text EXACTLY as they appear
+- For LBS program, match the degree title to the correct code (MAM/MIM/MBA/MFA)
+
+Return ONLY valid JSON with NO additional text.`,
+        tools: [{ type: "file_search" }],
+      }),
+    });
+
+    if (!assistantResponse.ok) {
+      const error = await assistantResponse.text();
+      throw new Error(`Failed to create assistant: ${error}`);
+    }
+
+    const assistant = await assistantResponse.json();
+    console.log(`Assistant created: ${assistant.id}`);
+
+    // 4. Create Thread with the file
+    const threadResponse = await fetch("https://api.openai.com/v1/threads", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${openaiApiKey}`,
+        "OpenAI-Beta": "assistants=v2",
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: "user",
+            content: `Please extract the following information from the attached CV and return it as a JSON object:
+
 {
   "first_name": string | null,
   "last_name": string | null,
@@ -154,62 +238,124 @@ Return ONLY a valid JSON object with these exact field names:
   "languages": string[],
   "current_location": string | null,
   "current_role": string | null,
-  "current_company": string | null
-}`,
-            },
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: "Please extract the required information from this CV/resume. Follow the extraction guidelines carefully and return only the JSON object.",
-                },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:application/pdf;base64,${base64Data}`,
-                  },
-                },
-              ],
-            },
-          ],
-          temperature: 0.1,
-          max_tokens: 1000,
-          response_format: { type: "json_object" },
+  "current_company": string | null,
+  "lbs_program": string | null,
+  "graduation_year": number | null
+}
+
+Remember to:
+- Extract the EXACT name spelling from the top of the CV
+- Find the LinkedIn URL in the contact section
+- Identify the LBS program code (MAM/MIM/MBA/MFA) from the degree title
+- Get the LBS graduation year from the education dates
+- Extract ALL languages mentioned
+- Get the undergraduate university name (Bachelor's degree only)
+
+Return ONLY the JSON object, no additional text.`,
+            attachments: [
+              {
+                file_id: fileId,
+                tools: [{ type: "file_search" }],
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    if (!threadResponse.ok) {
+      const error = await threadResponse.text();
+      throw new Error(`Failed to create thread: ${error}`);
+    }
+
+    const thread = await threadResponse.json();
+    console.log(`Thread created: ${thread.id}`);
+
+    // 5. Run the Assistant
+    const runResponse = await fetch(
+      `https://api.openai.com/v1/threads/${thread.id}/runs`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${openaiApiKey}`,
+          "OpenAI-Beta": "assistants=v2",
+        },
+        body: JSON.stringify({
+          assistant_id: assistant.id,
         }),
       }
     );
 
-    if (!openaiResponse.ok) {
-      const errorText = await openaiResponse.text();
-      console.error("OpenAI API error:", errorText);
-      throw new Error(`OpenAI API error: ${errorText}`);
+    if (!runResponse.ok) {
+      const error = await runResponse.text();
+      throw new Error(`Failed to run assistant: ${error}`);
     }
 
-    const openaiData = await openaiResponse.json();
-    
-    if (!openaiData.choices || !openaiData.choices[0]) {
-      throw new Error("Invalid response from OpenAI");
-    }
+    const run = await runResponse.json();
+    console.log(`Run started: ${run.id}`);
 
-    const extractedData: CVExtractionResult = JSON.parse(
-      openaiData.choices[0].message.content
+    // 6. Wait for completion
+    console.log("Waiting for assistant to complete...");
+    await waitForRunCompletion(thread.id, run.id, openaiApiKey);
+
+    // 7. Get the response
+    const messagesResponse = await fetch(
+      `https://api.openai.com/v1/threads/${thread.id}/messages`,
+      {
+        headers: {
+          "Authorization": `Bearer ${openaiApiKey}`,
+          "OpenAI-Beta": "assistants=v2",
+        },
+      }
     );
 
-    console.log("Extracted data:", extractedData);
+    const messages = await messagesResponse.json();
+    const assistantMessage = messages.data.find((msg: any) => msg.role === "assistant");
 
-    // 4. Validate extracted data
-    // Clean up LinkedIn URL if needed
-    if (extractedData.linkedin_url && !extractedData.linkedin_url.startsWith('http')) {
-      extractedData.linkedin_url = `https://${extractedData.linkedin_url}`;
+    if (!assistantMessage) {
+      throw new Error("No response from assistant");
     }
 
-    // Ensure languages is an array
+    // Extract text from message
+    let responseText = assistantMessage.content[0].text.value;
+    
+    // Clean up the response (remove markdown code blocks if present)
+    responseText = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    
+    console.log("Assistant response:", responseText);
+
+    const extractedData: CVExtractionResult = JSON.parse(responseText);
+
+    // 8. Cleanup - delete the file from OpenAI (optional but good practice)
+    try {
+      await fetch(`https://api.openai.com/v1/files/${fileId}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${openaiApiKey}`,
+        },
+      });
+      console.log(`Cleaned up file: ${fileId}`);
+    } catch (e) {
+      console.warn("Failed to delete file:", e);
+    }
+
+    // 9. Validate and clean data
+    if (extractedData.linkedin_url) {
+      let url = extractedData.linkedin_url.trim();
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = `https://${url}`;
+      }
+      extractedData.linkedin_url = url;
+    }
+
     if (!Array.isArray(extractedData.languages)) {
       extractedData.languages = [];
     }
 
-    // 5. Update profile with extracted data
+    console.log("Final extracted data:", JSON.stringify(extractedData, null, 2));
+
+    // 10. Update profile
     const { error: updateError } = await supabase
       .from("profiles")
       .update({
@@ -222,6 +368,8 @@ Return ONLY a valid JSON object with these exact field names:
         current_location: extractedData.current_location,
         current_role: extractedData.current_role,
         current_company: extractedData.current_company,
+        lbs_program: extractedData.lbs_program,
+        graduation_year: extractedData.graduation_year,
       })
       .eq("user_id", userId);
 
@@ -236,7 +384,7 @@ Return ONLY a valid JSON object with these exact field names:
       JSON.stringify({
         success: true,
         data: extractedData,
-        message: "CV data extracted and profile updated successfully"
+        message: "CV data extracted and profile updated successfully",
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
