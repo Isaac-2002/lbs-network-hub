@@ -227,7 +227,7 @@ const StudentOnboarding = () => {
                   We'll extract your information to create your profile
                 </p>
               </div>
-              <FileUpload onFileSelect={setCvFile} acceptedFormats=".pdf" />
+              <FileUpload onFileSelect={setCvFile} acceptedFormats=".pdf" maxSizeMB={1} />
             </div>
           )}
 
