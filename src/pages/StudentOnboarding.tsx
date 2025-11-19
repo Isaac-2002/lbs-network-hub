@@ -321,33 +321,33 @@ const StudentOnboarding = () => {
                   />
                   <div className="flex-1">
                     <Label htmlFor="send-weekly-updates" className="cursor-pointer">
-                      Send me 3 networking matches every week via email
+                      Send me 3 networking leads every week
                     </Label>
                   </div>
                 </div>
-              </div>
 
-              <div className="space-y-4">
-                <Label>I want to connect with:</Label>
-                <div className="space-y-3 pl-4">
-                  <div className="flex items-center space-x-3">
-                    <Checkbox
-                      id="connect-students"
-                      checked={connectWithStudents}
-                      onCheckedChange={(checked) => setConnectWithStudents(checked as boolean)}
-                    />
+                <div className="flex items-start space-x-3">
+                  <Checkbox
+                    id="connect-students"
+                    checked={connectWithStudents}
+                    onCheckedChange={(checked) => setConnectWithStudents(checked as boolean)}
+                  />
+                  <div className="flex-1">
                     <Label htmlFor="connect-students" className="cursor-pointer">
-                      Current Students
+                      Allow current students to be matched with me
                     </Label>
                   </div>
-                  <div className="flex items-center space-x-3">
-                    <Checkbox
-                      id="connect-alumni"
-                      checked={connectWithAlumni}
-                      onCheckedChange={(checked) => setConnectWithAlumni(checked as boolean)}
-                    />
+                </div>
+
+                <div className="flex items-start space-x-3">
+                  <Checkbox
+                    id="connect-alumni"
+                    checked={connectWithAlumni}
+                    onCheckedChange={(checked) => setConnectWithAlumni(checked as boolean)}
+                  />
+                  <div className="flex-1">
                     <Label htmlFor="connect-alumni" className="cursor-pointer">
-                      Alumni
+                      Allow other alumni to be matched with me
                     </Label>
                   </div>
                 </div>
@@ -356,7 +356,6 @@ const StudentOnboarding = () => {
               <div className="p-4 bg-muted/50 rounded-lg border border-border">
                 <p className="text-sm text-muted-foreground">
                   Your email and LinkedIn will be extracted from your CV and used for matches.
-                  By signing up for this service, you allow others to be matched with you.
                   We respect your privacy and you can update these preferences anytime in settings.
                 </p>
               </div>

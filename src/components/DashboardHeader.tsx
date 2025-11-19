@@ -51,7 +51,8 @@ export const DashboardHeader = () => {
             {navItems
               .filter((item) => 
                 !(location.pathname === "/dashboard" && item.to === "/dashboard") &&
-                !(location.pathname === "/update-status" && item.to === "/dashboard")
+                !(location.pathname === "/update-status" && item.to === "/dashboard") &&
+                !(location.pathname === "/settings" && item.to === "/dashboard")
               )
               .map((item) => (
                 <Link

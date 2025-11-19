@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -17,32 +17,100 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 const Settings = () => {
   const { toast } = useToast();
-  const [emailMatches, setEmailMatches] = useState(true);
-  const [allowMatching, setAllowMatching] = useState(true);
-  const [weeklyDigest, setWeeklyDigest] = useState(true);
-  const [matchNotifications, setMatchNotifications] = useState(true);
+  const { user } = useAuth();
+  const [weeklyMatchEmails, setWeeklyMatchEmails] = useState(true);
   const [connectWithStudents, setConnectWithStudents] = useState(true);
   const [connectWithAlumni, setConnectWithAlumni] = useState(true);
-  const [isPaused, setIsPaused] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = () => {
-    toast({
-      title: "Settings updated",
-      description: "Your preferences have been saved successfully.",
-    });
-  };
+  // Load preferences from database
+  useEffect(() => {
+    const loadPreferences = async () => {
+      if (!user) return;
 
-  const handlePauseToggle = () => {
-    setIsPaused(!isPaused);
-    toast({
-      title: isPaused ? "Matching resumed" : "Matching paused",
-      description: isPaused 
-        ? "You'll start receiving matches again next week."
-        : "You won't receive new matches until you resume.",
-    });
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("send_weekly_updates, connect_with_students, connect_with_alumni")
+          .eq("user_id", user.id)
+          .single();
+
+        if (error) {
+          console.error("Error loading preferences:", error);
+          toast({
+            title: "Error",
+            description: "Failed to load your preferences. Please try again.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (data) {
+          setWeeklyMatchEmails(data.send_weekly_updates ?? true);
+          setConnectWithStudents(data.connect_with_students ?? true);
+          setConnectWithAlumni(data.connect_with_alumni ?? true);
+        }
+      } catch (error) {
+        console.error("Error loading preferences:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load your preferences. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPreferences();
+  }, [user, toast]);
+
+  const handleSave = async () => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to save preferences.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          send_weekly_updates: weeklyMatchEmails,
+          connect_with_students: connectWithStudents,
+          connect_with_alumni: connectWithAlumni,
+        })
+        .eq("user_id", user.id);
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Settings updated",
+        description: "Your preferences have been saved successfully.",
+      });
+    } catch (error) {
+      console.error("Error saving preferences:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save your preferences. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -57,147 +125,58 @@ const Settings = () => {
           </div>
 
           <div className="space-y-6">
-            {/* Email Preferences */}
+            {/* Settings Options */}
             <Card>
               <CardContent className="p-6 space-y-6">
-                <div>
-                  <h3 className="font-semibold text-lg text-foreground mb-1">Email Preferences</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Choose how you want to receive notifications
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="email-matches">Weekly Match Emails</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Receive 3 matches every week via email
-                      </p>
-                    </div>
-                    <Switch
-                      id="email-matches"
-                      checked={emailMatches}
-                      onCheckedChange={setEmailMatches}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="weekly-digest">Weekly Digest</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Summary of your networking activity
-                      </p>
-                    </div>
-                    <Switch
-                      id="weekly-digest"
-                      checked={weeklyDigest}
-                      onCheckedChange={setWeeklyDigest}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="match-notifications">Match Notifications</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Get notified when someone views your profile
-                      </p>
-                    </div>
-                    <Switch
-                      id="match-notifications"
-                      checked={matchNotifications}
-                      onCheckedChange={setMatchNotifications}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Matching Preferences */}
-            <Card>
-              <CardContent className="p-6 space-y-6">
-                <div>
-                  <h3 className="font-semibold text-lg text-foreground mb-1">Matching Preferences</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Control who can see your profile and who you want to connect with
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="allow-matching">Allow Matching</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Let others be matched with you
-                      </p>
-                    </div>
-                    <Switch
-                      id="allow-matching"
-                      checked={allowMatching}
-                      onCheckedChange={setAllowMatching}
-                    />
-                  </div>
-
-                  <div className="pt-4 border-t">
-                    <Label className="mb-3 block">I want to connect with:</Label>
-                    <div className="space-y-3 pl-2">
-                      <div className="flex items-center space-x-3">
-                        <Checkbox
-                          id="connect-students"
-                          checked={connectWithStudents}
-                          onCheckedChange={(checked) => setConnectWithStudents(checked as boolean)}
-                        />
-                        <Label htmlFor="connect-students" className="cursor-pointer">
-                          Current Students
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <Checkbox
-                          id="connect-alumni"
-                          checked={connectWithAlumni}
-                          onCheckedChange={(checked) => setConnectWithAlumni(checked as boolean)}
-                        />
-                        <Label htmlFor="connect-alumni" className="cursor-pointer">
-                          Alumni
-                        </Label>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Pause Matching */}
-            <Card>
-              <CardContent className="p-6">
+                {/* Weekly Match Emails */}
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-semibold text-lg text-foreground mb-1">Pause Matching</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Temporarily stop receiving new matches
-                    </p>
+                  <div className="space-y-0.5">
+                    <Label htmlFor="weekly-match-emails">Weekly match emails</Label>
                   </div>
-                  <Button
-                    variant={isPaused ? "default" : "outline"}
-                    onClick={handlePauseToggle}
-                  >
-                    {isPaused ? "Resume" : "Pause"}
-                  </Button>
+                  <Switch
+                    id="weekly-match-emails"
+                    checked={weeklyMatchEmails}
+                    onCheckedChange={setWeeklyMatchEmails}
+                    disabled={loading}
+                  />
                 </div>
-                {isPaused && (
-                  <div className="mt-4 p-3 bg-muted/50 rounded-lg border border-border">
-                    <p className="text-sm text-muted-foreground">
-                      Matching is currently paused. You won't receive new matches until you resume.
-                    </p>
+
+                {/* Connect With Section */}
+                <div className="pt-4 border-t">
+                  <Label className="mb-3 block">I want to connect with:</Label>
+                  <div className="space-y-3 pl-2">
+                    <div className="flex items-center space-x-3">
+                      <Checkbox
+                        id="connect-students"
+                        checked={connectWithStudents}
+                        onCheckedChange={(checked) => setConnectWithStudents(checked as boolean)}
+                        disabled={loading}
+                      />
+                      <Label htmlFor="connect-students" className="cursor-pointer">
+                        Students
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <Checkbox
+                        id="connect-alumni"
+                        checked={connectWithAlumni}
+                        onCheckedChange={(checked) => setConnectWithAlumni(checked as boolean)}
+                        disabled={loading}
+                      />
+                      <Label htmlFor="connect-alumni" className="cursor-pointer">
+                        Alumni
+                      </Label>
+                    </div>
                   </div>
-                )}
+                </div>
               </CardContent>
             </Card>
 
             {/* Save Button */}
-            <div className="flex justify-end gap-4 pt-4">
-              <Button variant="outline">Cancel</Button>
-              <Button onClick={handleSave}>Save Preferences</Button>
+            <div className="flex justify-end">
+              <Button onClick={handleSave} disabled={loading || saving}>
+                {saving ? "Saving..." : "Save Preferences"}
+              </Button>
             </div>
 
             {/* Danger Zone */}

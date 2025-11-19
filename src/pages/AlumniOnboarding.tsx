@@ -392,7 +392,7 @@ const AlumniOnboarding = () => {
                   />
                   <div className="flex-1">
                     <Label htmlFor="send-weekly-updates" className="cursor-pointer">
-                      Send me 3 networking matches every week via email
+                      Send me 3 networking leads every week
                     </Label>
                   </div>
                 </div>
