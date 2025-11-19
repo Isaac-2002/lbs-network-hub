@@ -1,9 +1,9 @@
 import { CheckCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Header } from "@/components/Header";
+import { Header } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tag } from "@/components/Tag";
+import { Tag } from "@/components/common";
 
 const Welcome = () => {
   const navigate = useNavigate();

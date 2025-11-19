@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { DashboardHeader } from "@/components/DashboardHeader";
+import { DashboardHeader } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { GraduationCap, Users } from "lucide-react";
 

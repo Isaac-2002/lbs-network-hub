@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/features/auth";
 
 export const DashboardHeader = () => {
   const location = useLocation();

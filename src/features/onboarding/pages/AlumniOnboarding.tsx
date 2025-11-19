@@ -1,17 +1,15 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Header } from "@/components/Header";
-import { ProgressBar } from "@/components/ProgressBar";
-import { FileUpload } from "@/components/FileUpload";
-import { Tag } from "@/components/Tag";
+import { Header } from "@/components/layout";
+import { ProgressBar, FileUpload, Tag } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { TrendingUp, RefreshCw, Heart } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/features/auth";
+import { supabase } from "@/lib/api/supabase";
 import { useToast } from "@/hooks/use-toast";
 
 const STEPS = ["Upload CV", "Your Goals", "Industry Focus", "Consent"];

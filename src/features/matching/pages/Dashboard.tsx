@@ -1,64 +1,19 @@
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { DashboardHeader } from "@/components/DashboardHeader";
-import { MatchCard } from "@/components/MatchCard";
+import { DashboardHeader } from "@/components/layout";
+import { MatchCard } from "../components/MatchCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Tag } from "@/components/Tag";
+import { Tag } from "@/components/common";
 import { Edit, Search } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
-import { Profile } from "@/lib/types";
+import { useAuth } from "@/features/auth";
+import { useProfile, useProfileService } from "@/features/profile";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  // Fetch profile data
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("user_id", user.id)
-          .single();
-
-        if (error) {
-          console.error("Error fetching profile:", error);
-        } else {
-          setProfile(data);
-        }
-      } catch (error) {
-        console.error("Error fetching profile:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProfile();
-  }, [user]);
-
-  // Helper function to format networking goal
-  const formatNetworkingGoal = (goal: string): string => {
-    const goalMap: Record<string, string> = {
-      exploring: "Exploring specific industries",
-      venture: "Starting my own venture",
-      "figuring-out": "Still figuring it out",
-      expand: "Expand my network in my current industry",
-      pivot: "I'm pivoting to a new industry",
-      "give-back": "I want to give back to the LBS community",
-    };
-    return goalMap[goal] || goal;
-  };
+  const { data: profile, isLoading: loading } = useProfile(user?.id);
+  const profileService = useProfileService();
 
   // Get first name from profile
   const firstName = profile?.first_name || user?.email?.split("@")[0] || "there";
@@ -160,7 +115,7 @@ const Dashboard = () => {
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">Goal</p>
                     <p className="font-medium text-foreground">
-                      {formatNetworkingGoal(profile.networking_goal)}
+                      {profileService.formatNetworkingGoal(profile.networking_goal)}
                     </p>
                   </div>
                   {profile.target_industries && profile.target_industries.length > 0 && (

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DashboardHeader } from "@/components/DashboardHeader";
+import { DashboardHeader } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,8 +17,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/features/auth";
+import { supabase } from "@/lib/api/supabase";
 
 const Settings = () => {
   const { toast } = useToast();

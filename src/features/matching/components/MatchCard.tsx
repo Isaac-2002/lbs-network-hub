@@ -1,7 +1,7 @@
 import { Mail, Linkedin, User } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tag } from "./Tag";
+import { Tag } from "@/components/common";
 
 interface MatchCardProps {
   name: string;

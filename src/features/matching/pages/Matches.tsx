@@ -1,5 +1,5 @@
-import { DashboardHeader } from "@/components/DashboardHeader";
-import { MatchCard } from "@/components/MatchCard";
+import { DashboardHeader } from "@/components/layout";
+import { MatchCard } from "../components/MatchCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";

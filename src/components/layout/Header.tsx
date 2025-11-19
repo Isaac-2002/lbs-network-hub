@@ -2,9 +2,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { User, LogOut, LayoutDashboard, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { AuthDialog } from "@/components/AuthDialog";
-import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/features/auth";
+import { AuthDialog } from "@/features/auth/components/AuthDialog";
+import { supabase } from "@/lib/api/supabase";
 import {
   DropdownMenu,
   DropdownMenuContent,
