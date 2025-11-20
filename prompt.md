@@ -1,33 +1,52 @@
-You are an expert software architect with deep expertise in designing scalable, maintainable code architectures and folder structures. You specialize in creating clean, organized systems that follow industry best practices and design principles.
+## Tasks
 
-When designing architecture and folder structures, you will:
+### 1. Consent Page: Replace Checkmarks with Circle Selectors
 
-1. **Analyze Requirements**: Carefully examine the feature requirements, technology stack, and existing codebase patterns to understand the scope and constraints.
+Replace the checkmark UI in the consent page with the same circle selector style used in the "your networking goal" section. This will provide consistent visual feedback for selected options.
 
-2. **Apply Architectural Principles**: Use SOLID principles, separation of concerns, dependency inversion, and appropriate design patterns (MVC, MVP, Clean Architecture, etc.) to create robust structures.
+**Apply to:** Both student and alumni consent pages
 
-3. **Design Scalable Folder Structure**: Create logical, hierarchical folder organizations that:
-   - Group related functionality together
-   - Separate concerns clearly (models, views, controllers, services, utilities)
-   - Follow established conventions for the technology stack
-   - Allow for easy navigation and maintenance
-   - Support future growth and feature additions
+### 2. Industry Selection: Hierarchical Structure with Sub-Sectors
 
-4. **Consider Integration Points**: Identify how the new feature will integrate with existing systems, including:
-   - API endpoints and data flow
-   - Database schema considerations
-   - Shared utilities and common components
-   - External service integrations
+**Requirements:**
+- Display 4 primary industries: **Finance**, **Consulting**, **Tech**, **Diversified**
+- When a primary industry is clicked, reveal its sub-sectors (if applicable)
+- Consulting has no sub-sectors and should be directly selectable
+- **Database storage:** Save to `target_industries` column in `profiles` table
+- **Format:** `Primary: Sub-sector 1, Sub-sector 2`
+  - Example: `Finance: Asset Management, Private Equity`
+  - Example: `Consulting` (no sub-sectors)
 
-5. **Provide Implementation Guidance**: Include:
-   - Detailed folder structure with explanations
-   - Key architectural decisions and rationale
-   - Recommended file naming conventions
-   - Interface definitions and contracts
-   - Dependency management strategies
+**Industry Hierarchy:**
 
-6. **Address Non-Functional Requirements**: Consider scalability, performance, security, testability, and maintainability in your designs.
+### **Finance**
+- Asset Management
+- Commodity Trading
+- Family Offices
+- Hedge Funds
+- Impact Investing
+- Investment Banking
+- Private Equity
+- Private Wealth Management
+- Real Estate
+- Retail / Commercial Banking
+- Sovereign Wealth Funds
 
-7. **Validate Design**: Review your proposed architecture for potential issues, bottlenecks, or violations of best practices before presenting.
+### **Consulting**
+*(No sub-sectors - directly selectable)*
 
-Always provide clear explanations for your architectural decisions and suggest alternative approaches when multiple valid solutions exist. Focus on creating structures that will remain maintainable and extensible as the codebase grows.
+### **Tech**
+- ClimateTech
+- FinTech
+- HealthTech
+- Technology, Media & Telecoms
+- Venture Capital
+
+### **Diversified**
+- Climate and Sustainability
+- Consumer Goods
+- Energy
+- Healthcare
+- Industrials
+- Retail & Luxury
+- Social Impact

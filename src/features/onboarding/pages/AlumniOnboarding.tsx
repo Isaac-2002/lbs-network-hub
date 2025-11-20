@@ -5,29 +5,14 @@ import { ProgressBar, FileUpload, Tag } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { TrendingUp, RefreshCw, Heart } from "lucide-react";
+import { TrendingUp, RefreshCw, Heart, ChevronDown, ChevronUp, Circle } from "lucide-react";
 import { useAuth } from "@/features/auth";
 import { supabase } from "@/lib/api/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { INDUSTRIES, formatIndustriesForStorage } from "@/lib/constants/industries";
 
 const STEPS = ["Upload CV", "Your Goals", "Industry Focus", "Consent"];
-
-const INDUSTRIES = [
-  "Finance",
-  "Consulting",
-  "Technology",
-  "Healthcare",
-  "Real Estate",
-  "Private Equity",
-  "Venture Capital",
-  "Entrepreneurship",
-  "Consumer Goods",
-  "Energy",
-  "Media",
-  "Non-Profit",
-];
 
 const AlumniOnboarding = () => {
   const navigate = useNavigate();
@@ -38,7 +23,8 @@ const AlumniOnboarding = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [networkingGoal, setNetworkingGoal] = useState("");
-  const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
+  const [selectedIndustries, setSelectedIndustries] = useState<Record<string, string[]>>({});
+  const [expandedIndustries, setExpandedIndustries] = useState<Set<string>>(new Set());
   const [specificInterests, setSpecificInterests] = useState("");
   const [sendWeeklyUpdates, setSendWeeklyUpdates] = useState(true);
   const [connectWithStudents, setConnectWithStudents] = useState(true);
@@ -124,7 +110,7 @@ const AlumniOnboarding = () => {
         cv_path: filePath,
         cv_uploaded_at: new Date().toISOString(),
         networking_goal: networkingGoal,
-        target_industries: selectedIndustries,
+        target_industries: formatIndustriesForStorage(selectedIndustries),
         specific_interests: specificInterests || null,
         send_weekly_updates: sendWeeklyUpdates,
         connect_with_students: connectWithStudents,
@@ -189,12 +175,65 @@ const AlumniOnboarding = () => {
     }
   };
 
-  const toggleIndustry = (industry: string) => {
-    setSelectedIndustries((prev) =>
-      prev.includes(industry)
-        ? prev.filter((i) => i !== industry)
-        : [...prev, industry]
-    );
+  const togglePrimaryIndustry = (primaryIndustry: string) => {
+    const industry = INDUSTRIES.find((i) => i.name === primaryIndustry);
+
+    if (!industry) return;
+
+    // If industry has no sub-sectors (like Consulting), toggle it directly
+    if (!industry.subSectors || industry.subSectors.length === 0) {
+      setSelectedIndustries((prev) => {
+        const newSelected = { ...prev };
+        if (primaryIndustry in newSelected) {
+          delete newSelected[primaryIndustry];
+        } else {
+          newSelected[primaryIndustry] = [];
+        }
+        return newSelected;
+      });
+      return;
+    }
+
+    // If industry has sub-sectors, toggle expansion
+    setExpandedIndustries((prev) => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(primaryIndustry)) {
+        newExpanded.delete(primaryIndustry);
+      } else {
+        newExpanded.add(primaryIndustry);
+      }
+      return newExpanded;
+    });
+  };
+
+  const toggleSubSector = (primaryIndustry: string, subSector: string) => {
+    setSelectedIndustries((prev) => {
+      const newSelected = { ...prev };
+      const currentSubSectors = newSelected[primaryIndustry] || [];
+
+      if (currentSubSectors.includes(subSector)) {
+        // Remove sub-sector
+        const updated = currentSubSectors.filter((s) => s !== subSector);
+        if (updated.length === 0) {
+          delete newSelected[primaryIndustry];
+        } else {
+          newSelected[primaryIndustry] = updated;
+        }
+      } else {
+        // Add sub-sector
+        newSelected[primaryIndustry] = [...currentSubSectors, subSector];
+      }
+
+      return newSelected;
+    });
+  };
+
+  const isIndustrySelected = (primaryIndustry: string): boolean => {
+    return primaryIndustry in selectedIndustries;
+  };
+
+  const isSubSectorSelected = (primaryIndustry: string, subSector: string): boolean => {
+    return selectedIndustries[primaryIndustry]?.includes(subSector) || false;
   };
 
   const canProceed = () => {
@@ -208,7 +247,7 @@ const AlumniOnboarding = () => {
         if (networkingGoal === "give-back") {
           return specificInterests.trim() !== "";
         }
-        return selectedIndustries.length > 0 && specificInterests.trim() !== "";
+        return Object.keys(selectedIndustries).length > 0 && specificInterests.trim() !== "";
       case 3:
         return true;
       default:
@@ -222,7 +261,7 @@ const AlumniOnboarding = () => {
     } else if (networkingGoal === "pivot") {
       return "Which industry are you targeting?";
     } else if (networkingGoal === "give-back") {
-      return "Which industries are you interested in?";
+      return "Tell us what you'd like to help with";
     }
     return "Select Industries";
   };
@@ -327,24 +366,60 @@ const AlumniOnboarding = () => {
             <div className="space-y-6">
               <div>
                 <h2 className="text-3xl font-bold text-primary mb-2">{getIndustryTitle()}</h2>
-                <p className="text-muted-foreground">
-                  {networkingGoal === "give-back"
-                    ? "Tell us what you'd like to help with"
-                    : "Select the industries you're interested in connecting within"}
-                </p>
+                {networkingGoal !== "give-back" && (
+                  <p className="text-muted-foreground">
+                    Select the industries you're interested in connecting within
+                  </p>
+                )}
               </div>
 
               {networkingGoal !== "give-back" && (
-                <div className="space-y-2">
-                  <Label>Select industries</Label>
-                  <div className="flex flex-wrap gap-2 p-4 bg-secondary rounded-lg">
+                <div className="space-y-3">
+                  <Label>Select industries and sub-sectors</Label>
+                  <div className="space-y-2">
                     {INDUSTRIES.map((industry) => (
-                      <Tag
-                        key={industry}
-                        label={industry}
-                        selected={selectedIndustries.includes(industry)}
-                        onToggle={() => toggleIndustry(industry)}
-                      />
+                      <div key={industry.name} className="space-y-2">
+                        <div
+                          className={`flex items-center justify-between p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                            isIndustrySelected(industry.name)
+                              ? "border-primary bg-primary/5"
+                              : "border-border hover:border-primary/50"
+                          }`}
+                          onClick={() => togglePrimaryIndustry(industry.name)}
+                        >
+                          <span className="font-medium">{industry.name}</span>
+                          {industry.subSectors && industry.subSectors.length > 0 && (
+                            <div className="flex items-center gap-2">
+                              {isIndustrySelected(industry.name) && (
+                                <span className="text-xs text-muted-foreground">
+                                  {selectedIndustries[industry.name]?.length || 0} selected
+                                </span>
+                              )}
+                              {expandedIndustries.has(industry.name) ? (
+                                <ChevronUp className="h-4 w-4" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4" />
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        {industry.subSectors &&
+                          industry.subSectors.length > 0 &&
+                          expandedIndustries.has(industry.name) && (
+                            <div className="ml-4 pl-4 border-l-2 border-border space-y-1">
+                              <div className="flex flex-wrap gap-2 p-3 bg-secondary/50 rounded-lg">
+                                {industry.subSectors.map((subSector) => (
+                                  <Tag
+                                    key={subSector}
+                                    label={subSector}
+                                    selected={isSubSectorSelected(industry.name, subSector)}
+                                    onToggle={() => toggleSubSector(industry.name, subSector)}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -381,44 +456,47 @@ const AlumniOnboarding = () => {
                 </p>
               </div>
 
-              <div className="space-y-4 p-6 bg-secondary rounded-lg">
-                <div className="flex items-start space-x-3">
-                  <Checkbox
-                    id="send-weekly-updates"
-                    checked={sendWeeklyUpdates}
-                    onCheckedChange={(checked) => setSendWeeklyUpdates(checked as boolean)}
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="send-weekly-updates" className="cursor-pointer">
-                      Send me 3 networking leads every week
-                    </Label>
+              <div className="space-y-4">
+                <div
+                  className="flex items-center space-x-3 p-4 border-2 border-border hover:border-primary/50 rounded-lg cursor-pointer transition-all"
+                  onClick={() => setSendWeeklyUpdates(!sendWeeklyUpdates)}
+                >
+                  <div className={`aspect-square h-4 w-4 rounded-full border text-primary ring-offset-background flex items-center justify-center ${
+                    sendWeeklyUpdates ? "border-primary" : "border-input"
+                  }`}>
+                    {sendWeeklyUpdates && <Circle className="h-2.5 w-2.5 fill-current text-current" />}
                   </div>
+                  <Label htmlFor="send-weekly-updates" className="cursor-pointer flex-1">
+                    Send me 3 networking leads every week
+                  </Label>
                 </div>
 
-                <div className="flex items-start space-x-3">
-                  <Checkbox
-                    id="connect-students"
-                    checked={connectWithStudents}
-                    onCheckedChange={(checked) => setConnectWithStudents(checked as boolean)}
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="connect-students" className="cursor-pointer">
-                      Allow current students to be matched with me
-                    </Label>
+                <div
+                  className="flex items-center space-x-3 p-4 border-2 border-border hover:border-primary/50 rounded-lg cursor-pointer transition-all"
+                  onClick={() => setConnectWithStudents(!connectWithStudents)}
+                >
+                  <div className={`aspect-square h-4 w-4 rounded-full border text-primary ring-offset-background flex items-center justify-center ${
+                    connectWithStudents ? "border-primary" : "border-input"
+                  }`}>
+                    {connectWithStudents && <Circle className="h-2.5 w-2.5 fill-current text-current" />}
                   </div>
+                  <Label htmlFor="connect-students" className="cursor-pointer flex-1">
+                    Allow current students to be matched with me
+                  </Label>
                 </div>
 
-                <div className="flex items-start space-x-3">
-                  <Checkbox
-                    id="connect-alumni"
-                    checked={connectWithAlumni}
-                    onCheckedChange={(checked) => setConnectWithAlumni(checked as boolean)}
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="connect-alumni" className="cursor-pointer">
-                      Allow other alumni to be matched with me
-                    </Label>
+                <div
+                  className="flex items-center space-x-3 p-4 border-2 border-border hover:border-primary/50 rounded-lg cursor-pointer transition-all"
+                  onClick={() => setConnectWithAlumni(!connectWithAlumni)}
+                >
+                  <div className={`aspect-square h-4 w-4 rounded-full border text-primary ring-offset-background flex items-center justify-center ${
+                    connectWithAlumni ? "border-primary" : "border-input"
+                  }`}>
+                    {connectWithAlumni && <Circle className="h-2.5 w-2.5 fill-current text-current" />}
                   </div>
+                  <Label htmlFor="connect-alumni" className="cursor-pointer flex-1">
+                    Allow other alumni to be matched with me
+                  </Label>
                 </div>
               </div>
 
