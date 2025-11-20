@@ -20,6 +20,7 @@ interface CVExtractionResult {
   current_company: string | null;
   lbs_program: string | null;
   graduation_year: number | null;
+  work_history: Array<{ role: string; company: string; years: string }>;
 }
 
 // Helper function to poll for assistant run completion
@@ -132,77 +133,21 @@ serve(async (req) => {
       body: JSON.stringify({
         model: "gpt-4o",
         name: "CV Data Extractor",
-        instructions: `You are an expert CV/resume data extraction assistant. You will be given a CV/resume PDF file and must extract specific information accurately.
+        instructions: `Extract data from CV PDF and return as JSON. Extract EXACT text as written.
 
-CRITICAL EXTRACTION RULES:
+Fields to extract:
+- first_name, last_name: From document header (exact spelling)
+- linkedin_url: Full URL from contact section
+- undergraduate_university: Bachelor's degree university name only (exact spelling)
+- languages: Array of all languages mentioned
+- current_location: "City, Country" from contact section
+- current_role, current_company: Most recent position
+- lbs_program: "MAM", "MIM", "MBA", or "MFA" based on London Business School degree title
+- graduation_year: End year from LBS education dates
+- work_history: Array of objects with {role, company, years} for all positions listed
+- years_of_experience: Calculate from earliest to latest work date
 
-**Name (MOST IMPORTANT - Read the EXACT name from the document):**
-- Look at the very top of the CV - the name is usually the largest text at the top
-- Extract the EXACT spelling as written - do not modify or assume
-- first_name: First word of the full name
-- last_name: Last word(s) of the full name
-- Example: "Isaac Hasbani" → first_name: "Isaac", last_name: "Hasbani"
-- If you see "Isaac Hasbani", the last name is "Hasbani" NOT "Ashbani" or any variation
-
-**LinkedIn URL:**
-- Look in the header/contact section (usually near email/phone)
-- Extract the FULL URL or username
-- Common formats: "LinkedIn", "linkedin.com/in/xxx", or just a hyperlink
-- If you see just "LinkedIn" as a link text, note that but return null if you can't find the actual URL
-
-**LBS Program (London Business School):**
-- Look in the Education section for "London Business School"
-- Extract the exact program name: "Master's in Analytics and Management" → "MAM"
-- Possible values: MAM, MIM, MBA, MFA
-- Match the program title to these codes:
-  - "Analytics and Management" or "Master's in Analytics and Management" → "MAM"
-  - "Management" or "Master in Management" → "MIM"
-  - "Master of Business Administration" or "MBA" → "MBA"
-  - "Master in Financial Analysis" or "MFA" → "MFA"
-
-**Graduation Year (LBS):**
-- Look at the dates for London Business School education
-- Extract the END year (when they graduate/graduated)
-- Example: "2024 - 2025 London Business School" → graduation_year: 2025
-
-**Undergraduate University:**
-- Find the BACHELOR'S degree in Education section
-- Extract the full university name EXACTLY as written
-- Look for: "Bachelor", "BSc", "BA", "B.Eng", etc.
-- Example: "Università Commerciale Luigi Bocconi" (keep the exact spelling)
-- IGNORE: Master's degrees, London Business School, exchange programs
-
-**Languages:**
-- Look for a "Languages" section (usually at the bottom)
-- Extract ONLY the language names as an array
-- Example: "Italian (native), English (fluent), French (fluent), Spanish (conversational)"
-  → languages: ["Italian", "English", "French", "Spanish"]
-- Include ALL languages mentioned, regardless of proficiency level
-
-**Years of Experience:**
-- Look at the "Business Experience" or "Work Experience" section
-- Calculate: (Latest end date OR current year) - (Earliest start date)
-- Count internships and full-time roles
-- Example: Experience from 2023 to 2025 → 2 years
-
-**Current Location:**
-- Look in the header/contact section for address or location
-- Often near phone number and email
-- Format as "City, Country"
-
-**Current Role & Company:**
-- Find the MOST RECENT position (topmost in experience section)
-- Extract the exact job title and company name
-- If currently a student at LBS, role could be "Student" or the most recent role before studies
-
-IMPORTANT:
-- Read the PDF carefully - do not guess or make assumptions
-- If information is clearly stated, extract it exactly as written
-- If information is not found, return null
-- Pay special attention to spelling - extract names and text EXACTLY as they appear
-- For LBS program, match the degree title to the correct code (MAM/MIM/MBA/MFA)
-
-Return ONLY valid JSON with NO additional text.`,
+Return ONLY valid JSON, no additional text. Use null if information not found.`,
         tools: [{ type: "file_search" }],
       }),
     });
@@ -227,31 +172,7 @@ Return ONLY valid JSON with NO additional text.`,
         messages: [
           {
             role: "user",
-            content: `Please extract the following information from the attached CV and return it as a JSON object:
-
-{
-  "first_name": string | null,
-  "last_name": string | null,
-  "linkedin_url": string | null,
-  "years_of_experience": number | null,
-  "undergraduate_university": string | null,
-  "languages": string[],
-  "current_location": string | null,
-  "current_role": string | null,
-  "current_company": string | null,
-  "lbs_program": string | null,
-  "graduation_year": number | null
-}
-
-Remember to:
-- Extract the EXACT name spelling from the top of the CV
-- Find the LinkedIn URL in the contact section
-- Identify the LBS program code (MAM/MIM/MBA/MFA) from the degree title
-- Get the LBS graduation year from the education dates
-- Extract ALL languages mentioned
-- Get the undergraduate university name (Bachelor's degree only)
-
-Return ONLY the JSON object, no additional text.`,
+            content: `Extract all fields from the attached CV as specified in your instructions. Return only valid JSON.`,
             attachments: [
               {
                 file_id: fileId,
@@ -370,6 +291,7 @@ Return ONLY the JSON object, no additional text.`,
         current_company: extractedData.current_company,
         lbs_program: extractedData.lbs_program,
         graduation_year: extractedData.graduation_year,
+        work_history: extractedData.work_history,
       })
       .eq("user_id", userId);
 
@@ -380,8 +302,8 @@ Return ONLY the JSON object, no additional text.`,
 
     console.log(`Successfully updated profile for user ${userId}`);
 
-    // 11. Fetch the complete profile to generate summary
-    console.log("Fetching complete profile for summary generation...");
+    // 11. Fetch the complete profile to build summary
+    console.log("Fetching complete profile for summary...");
     const { data: profileData, error: profileError } = await supabase
       .from("profiles")
       .select("*")
@@ -392,100 +314,39 @@ Return ONLY the JSON object, no additional text.`,
       console.error("Failed to fetch profile:", profileError);
       // Don't fail the entire operation, just log the error
     } else if (profileData) {
-      console.log("Generating profile summary...");
+      console.log("Building profile summary from extracted data...");
 
-      // 12. Generate profile summary using OpenAI
+      // 12. Build profile summary programmatically (no LLM call needed)
       try {
-        const summaryPrompt = `You are an expert at creating concise professional profile summaries for networking and career matching purposes.
+        const educationSummary = [
+          profileData.lbs_program ? `${profileData.lbs_program} at London Business School` : null,
+          profileData.graduation_year ? `(${profileData.graduation_year})` : null,
+          profileData.undergraduate_university ? `Undergraduate: ${profileData.undergraduate_university}` : null
+        ].filter(Boolean).join(' ');
 
-Given the following profile data, create a structured JSON summary that will be used to match this person with other professionals based on:
-- Shared career interests and goals
-- Complementary professional backgrounds
-- Industry alignment
-- Common educational backgrounds
-- Networking objectives
-
-Profile Data:
-- Name: ${profileData.first_name} ${profileData.last_name}
-- User Type: ${profileData.user_type} (${profileData.user_type === 'student' ? 'current student' : 'alumni'})
-- LBS Program: ${profileData.lbs_program || 'Not specified'} (Graduation: ${profileData.graduation_year || 'Not specified'})
-- Undergraduate: ${profileData.undergraduate_university || 'Not specified'}
-- Years of Experience: ${profileData.years_of_experience || 0}
-- Current Role: ${profileData.current_role || 'Not specified'} at ${profileData.current_company || 'Not specified'}
-- Location: ${profileData.current_location || 'Not specified'}
-- Languages: ${profileData.languages?.join(', ') || 'Not specified'}
-- Networking Goal: ${profileData.networking_goal || 'Not specified'}
-- Target Industries: ${profileData.target_industries?.join(', ') || 'Not specified'}
-- Specific Interests: ${profileData.specific_interests || 'Not specified'}
-
-Create a JSON object with the following structure:
-
-{
-  "professional_background": "A 2-3 sentence summary of their work experience and current role",
-  "education_summary": "A brief summary of their educational background including LBS program and undergraduate university",
-  "career_goals": "1-2 sentences about what they want to achieve professionally",
-  "target_industries": ["array", "of", "industries"],
-  "interests": "A concise summary of their specific interests and what they're passionate about",
-  "key_strengths": ["array", "of", "3-5", "notable", "skills or experiences"],
-  "languages": ["array", "of", "languages"],
-  "networking_purpose": "What they're looking for in professional connections (1 sentence)",
-  "match_keywords": ["array", "of", "10-15", "keywords", "for", "matching"]
-}
-
-Important:
-- Keep summaries concise and focused on information relevant for matching
-- Extract key themes and skills from their experience
-- Highlight what makes them unique or interesting for networking
-- Use the networking goal to understand what they're seeking
-- Generate match_keywords that include: industries, skills, interests, roles, and themes
-- Be specific and avoid generic statements
-
-Return ONLY the JSON object, no additional text.`;
-
-        const summaryResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${openaiApiKey}`,
+        const profileSummary = {
+          networking_goal: profileData.networking_goal || null,
+          specific_interests: profileData.specific_interests || null,
+          target_industries: profileData.target_industries || [],
+          user_type: profileData.user_type || null,
+          match_preferences: {
+            students: profileData.connect_with_students || false,
+            alumni: profileData.connect_with_alumni || false
           },
-          body: JSON.stringify({
-            model: "gpt-4o",
-            messages: [
-              {
-                role: "system",
-                content: "You are an expert at creating structured professional profile summaries for networking and matching purposes. Always return valid JSON only."
-              },
-              {
-                role: "user",
-                content: summaryPrompt
-              }
-            ],
-            temperature: 0.7,
-            max_tokens: 1000,
-          }),
-        });
+          education_summary: educationSummary || null,
+          languages: profileData.languages || [],
+          lbs_program: profileData.lbs_program || null,
+          work_history: extractedData.work_history || []
+        };
 
-        if (!summaryResponse.ok) {
-          const error = await summaryResponse.text();
-          throw new Error(`Failed to generate summary: ${error}`);
-        }
+        console.log("Profile summary built:", JSON.stringify(profileSummary, null, 2));
 
-        const summaryResult = await summaryResponse.json();
-        let summaryText = summaryResult.choices[0].message.content.trim();
-
-        // Clean up markdown code blocks if present
-        summaryText = summaryText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-
-        const summaryJson = JSON.parse(summaryText);
-
-        console.log("Profile summary generated:", JSON.stringify(summaryJson, null, 2));
-
-        // 13. Store or update the profile summary
+        // 13. Store the profile summary
         const { error: summaryError } = await supabase
           .from("profile_summaries")
           .upsert({
             user_id: userId,
-            summary_json: summaryJson,
+            summary_json: profileSummary,
             updated_at: new Date().toISOString(),
           }, {
             onConflict: 'user_id'
@@ -498,7 +359,7 @@ Return ONLY the JSON object, no additional text.`;
           console.log("Profile summary stored successfully");
         }
       } catch (summaryError) {
-        console.error("Error generating/storing profile summary:", summaryError);
+        console.error("Error building/storing profile summary:", summaryError);
         // Don't fail the entire operation, profile update was successful
       }
     }
@@ -507,7 +368,7 @@ Return ONLY the JSON object, no additional text.`;
       JSON.stringify({
         success: true,
         data: extractedData,
-        message: "CV data extracted, profile updated, and summary generated successfully",
+        message: "CV data extracted, profile updated, and summary created successfully",
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
