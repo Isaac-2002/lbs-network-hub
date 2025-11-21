@@ -1,43 +1,322 @@
-# Purpose
+# LBS Network Hub
+
+## Purpose
 Networking platform matching London Business School students and alumni based on career interests using AI.
-Tech Stack
+
+## Quick Status Overview
+**✅ Core Features Implemented**:
+- User authentication and onboarding
+- CV upload and AI-powered data extraction (OpenAI Assistants API)
+- Automatic profile summary generation
+- On-demand match recommendations (GPT-4o)
+- Dashboard with match display and contact functionality
+
+**📋 Planned Features**:
+- Weekly automated match generation (cron job)
+- Email notifications with match recommendations
+- Accept/decline match workflow
+- Match analytics and success tracking
 
 ## Tech Stack
-Frontend: React/Next.js on Vercel
-Backend: Supabase (PostgreSQL, Auth, Storage, Edge Functions)
-AI: OpenAI GPT-4o for CV extraction
+**Frontend**: React 18 + TypeScript + Vite (deployed on Vercel)
+**Backend**: Supabase (PostgreSQL, Auth, Storage, Edge Functions - Deno)
+**AI**:
+- OpenAI Assistants API v2 (CV extraction)
+- OpenAI GPT-4o (match scoring and personalization)
+**State Management**: React Query + Context API
+**UI Components**: shadcn/ui + Tailwind CSS
+**Architecture**: Feature-based layered architecture with service/repository patterns
 
-##Database Schema
-profiles table:
+## Database Schema
 
-Identity: user_id, email
-Personal: first_name, last_name, linkedin_url
-Education: user_type (student/alumni), lbs_program (MAM/MIM/MBA/MFA), graduation_year, undergraduate_university
-Professional: years_of_experience, current_role, current_company, current_location, languages[]
-Preferences: networking_goal, target_industries[], specific_interests
-Consent: connect_with_students, connect_with_alumni, send_weekly_updates
-System: cv_path, onboarding_completed
+### profiles table (26 columns):
 
-##User Flow
+**Identity**: user_id, email, id
+**Personal**: first_name, last_name, linkedin_url
+**Education**: user_type (student/alumni), lbs_program (MAM/MIM/MBA/MFA), graduation_year, undergraduate_university
+**Professional**: years_of_experience, current_role, current_company, current_location, languages[], work_history[]
+**Preferences**: networking_goal, target_industries[], specific_interests
+**Consent**: connect_with_students, connect_with_alumni, send_weekly_updates
+**System**: cv_path, cv_uploaded_at, onboarding_completed, created_at, updated_at
 
-1. Register with email
-2. Select user type (student/alumni)
-3. Upload CV (PDF only)
-4. Fill interests form
-5. Set consent preferences
-6. Edge function extracts CV data via OpenAI and updates the profile table with extracted + user data
+### profile_summaries table:
+- id: UUID (primary key)
+- user_id: UUID (unique, references profiles)
+- summary_json: JSONB (contains structured profile data for matching)
+- created_at: TIMESTAMP
+- updated_at: TIMESTAMP
 
-## CV Extraction (Edge Function)
+### matches table:
+- id: UUID (primary key)
+- user_id: UUID (the person requesting matches)
+- matched_user_id: UUID (the recommended person)
+- score: DECIMAL(3,2) (compatibility score 0.00 to 1.00)
+- reason: TEXT (personalized LLM-generated match explanation)
+- status: TEXT ('pending', 'accepted', 'declined', 'expired')
+- created_at: TIMESTAMP
+- expires_at: TIMESTAMP (nullable)
 
-Uploads PDF to OpenAI Assistants API
-Extracts: name, LinkedIn, experience, education, languages, location, role, company
-Updates profiles table
-Returns JSON response
+### match_interactions table:
+- id: UUID (primary key)
+- match_id: UUID (references matches)
+- interaction_type: TEXT ('viewed', 'contacted', 'declined')
+- interaction_date: TIMESTAMP
 
-## Next steps
-Once user profiles are populated with CV-extracted data and onboarding preferences, the system will generate profile summaries that combine career goals, target industries, professional background, and interests into structured JSON objects stored in a new table.
+### email_logs table:
+- id: UUID (primary key)
+- user_id: UUID (references profiles)
+- email_type: TEXT ('match_notification', 'welcome', etc.)
+- sent_at: TIMESTAMP
+- status: TEXT ('sent', 'failed', 'bounced')
 
-Each week, an automated matching process will run for users who have opted into weekly updates. For each user, the system will first apply rule-based filters to create a candidate pool. The filtered candidates' JSON profiles will then be sent to an LLM along with the user's profile and a detailed prompt containing our matching guidelines. The LLM will analyze the profiles, score their compatibility based on shared interests, complementary goals, and career alignment, then return the top 3 best matches with explanations for why each connection would be valuable. Finally, the system will generate personalized introduction email templates and send them to users with each match's LinkedIn URL and email address, enabling them to easily reach out and expand their professional network within the LBS community.
+## User Flow
+
+1. **Register** with email via Supabase Auth
+2. **Select user type** (student/alumni)
+3. **Upload CV** (PDF only, max 1MB)
+4. **Fill interests form** (networking goal, target industries, specific interests)
+5. **Set consent preferences** (connect with students/alumni, weekly updates)
+6. **CV Processing**:
+   - Edge function extracts CV data via OpenAI Assistants API
+   - Updates profiles table with extracted fields
+   - Generates and stores profile summary in profile_summaries table
+7. **Dashboard**:
+   - View current profile summary
+   - Click "Generate Recommendations" button
+   - Matching algorithm runs (5-15 seconds)
+   - Receive 3 personalized match recommendations
+8. **Connect** with matches via email or LinkedIn
+
+## CV Extraction & Profile Summary (Edge Function: extract-cv-data)
+
+**Process**:
+1. Downloads PDF from Supabase Storage
+2. Uploads to OpenAI Files API
+3. Creates OpenAI Assistant with file_search capability
+4. Runs assistant to extract structured data from CV
+5. **Extracts**: name, LinkedIn URL, years of experience, education, languages, current role/company/location, LBS program, graduation year, work history
+6. Updates profiles table with extracted fields
+7. **Generates profile summary** combining CV data + user onboarding input
+8. Stores profile summary in profile_summaries table (JSONB format)
+9. Returns success response with extracted data
+
+## Matching Algorithm (Edge Function: generate-recommendations)
+
+**Status**: ✅ Fully Implemented
+
+The matching system uses a **two-tier approach** combining rule-based filtering and LLM-based scoring:
+
+### Tier 1: Rule-Based Filtering
+The edge function applies pre-filtering to create a candidate pool:
+- Only includes users with `onboarding_completed = true`
+- Respects mutual preferences (both users must be willing to connect with each other's type)
+- Filters based on `connect_with_students` and `connect_with_alumni` flags
+- Excludes the requesting user
+
+### Tier 2: LLM-Based Scoring (GPT-4o)
+After filtering, GPT-4o analyzes all candidate profiles to provide personalized match recommendations:
+
+**Evaluation Criteria** (5 factors):
+1. **Shared Industries**: Overlap in target industries
+2. **Complementary Goals**: Alignment of networking objectives
+3. **Common Background**: Same university, similar experience level, shared interests
+4. **LBS Connection**: Same or complementary LBS programs
+5. **Mutual Benefit**: How both parties would benefit from connecting
+
+**Output**: Top 3 matches with:
+- Compatibility score (0.00 to 1.00)
+- Personalized 2-3 sentence explanation of why they should connect
+- Status set to 'pending'
+
+**Process Flow**:
+```
+User clicks "Generate Recommendations"
+    ↓
+1. Fetch user profile + summary
+2. Apply rule-based filters → candidate pool
+3. Fetch candidate profile summaries
+4. Construct detailed prompt with all profiles
+5. Send to GPT-4o for analysis (temperature: 0.7)
+6. Parse JSON response (validates format)
+7. Delete old pending matches
+8. Insert new matches with scores + reasons
+9. Return matches with joined profile data
+    ↓
+Display 3 MatchCards with contact buttons
+```
+
+**Frontend Implementation**:
+- `Dashboard.tsx`: Shows profile summary + "Generate Recommendations" button
+- `MatchCard.tsx`: Displays match with avatar, details, compatibility score, LLM-generated reason, email/LinkedIn buttons
+- `useMatches` hook: Fetches and caches matches via React Query
+- `MatchingService` + `MatchRepository`: Service layer for business logic and data access
+
+**Performance**: 5-15 seconds per generation
+**Cost**: ~$0.02-0.05 per recommendation request
+
+### Profile Summary Structure
+Profile summaries are stored in JSONB format and contain:
+```json
+{
+  "networking_goal": "Find mentors in private equity",
+  "target_industries": ["Finance", "Private Equity", "Venture Capital"],
+  "specific_interests": "Impact investing, ESG frameworks",
+  "work_history": [
+    {
+      "role": "Investment Analyst",
+      "company": "Goldman Sachs",
+      "years": "2020-2022"
+    }
+  ],
+  "education_summary": "BSc Economics from LSE",
+  "languages": ["English", "French", "Spanish"],
+  "lbs_program": "MAM",
+  "graduation_year": 2024,
+  "user_type": "student",
+  "match_preferences": {
+    "connect_with_students": true,
+    "connect_with_alumni": true
+  }
+}
+```
+
+This structured summary enables efficient matching by providing the LLM with concise, relevant information about each candidate without needing to process full CVs.
+
+## Edge Functions Implementation
+
+### 1. extract-cv-data (✅ Implemented)
+**Location**: `/supabase/functions/extract-cv-data/index.ts`
+
+**Triggers**: Called after user uploads CV during onboarding
+
+**Process**:
+1. Downloads PDF from Supabase Storage bucket
+2. Uploads to OpenAI Files API
+3. Creates Assistant with `file_search` capability
+4. Runs assistant with extraction prompt
+5. Parses JSON response containing:
+   - Personal: first_name, last_name, linkedin_url
+   - Professional: years_of_experience, current_role, current_company, current_location
+   - Education: undergraduate_university, languages[]
+   - Work history: Array of {role, company, years}
+6. Updates `profiles` table with extracted data
+7. **Generates profile summary** by combining:
+   - CV extracted data (work history, education, skills)
+   - User onboarding input (networking_goal, target_industries, specific_interests)
+8. Upserts to `profile_summaries` table (JSONB format)
+9. Cleans up: deletes temporary OpenAI file
+10. Returns extracted data to frontend
+
+**Key Features**:
+- Handles malformed JSON gracefully with validation
+- Cleans extracted data (removes null/undefined values)
+- Builds comprehensive profile summary for matching
+- Error handling for OpenAI API failures
+
+### 2. generate-recommendations (✅ Implemented)
+**Location**: `/supabase/functions/generate-recommendations/index.ts`
+
+**Triggers**: User clicks "Generate Recommendations" button on dashboard
+
+**Process**:
+1. **Fetch user data**:
+   - Get user's profile from `profiles` table
+   - Get user's profile summary from `profile_summaries` table
+
+2. **Rule-based filtering**:
+   ```sql
+   -- Get all completed profiles except the user
+   WHERE onboarding_completed = true
+     AND user_id != requesting_user_id
+
+   -- Filter by user's preferences
+   AND (
+     (user.user_type = 'student' AND candidate.connect_with_students = true)
+     OR
+     (user.user_type = 'alumni' AND candidate.connect_with_alumni = true)
+   )
+
+   -- Filter by candidate's preferences
+   AND (
+     (candidate.user_type = 'student' AND user.connect_with_students = true)
+     OR
+     (candidate.user_type = 'alumni' AND user.connect_with_alumni = true)
+   )
+   ```
+
+3. **Fetch candidate summaries**: Get profile_summaries for all filtered candidates
+
+4. **Construct LLM prompt**:
+   - User's complete profile + summary
+   - All candidate profiles + summaries
+   - Detailed matching criteria (5 factors)
+   - Instructions to return top 3 with scores and reasons
+   - JSON schema for response format
+
+5. **Call OpenAI GPT-4o**:
+   - Model: gpt-4o
+   - Temperature: 0.7 (balanced creativity)
+   - Max tokens: 2000
+   - JSON mode enabled
+
+6. **Parse and validate response**:
+   - Validates JSON structure
+   - Ensures 3 matches returned
+   - Validates score range (0.0-1.0)
+   - Checks for required fields
+
+7. **Database operations**:
+   ```sql
+   -- Delete old pending matches for this user
+   DELETE FROM matches
+   WHERE user_id = requesting_user_id
+     AND status = 'pending';
+
+   -- Insert new matches
+   INSERT INTO matches (user_id, matched_user_id, score, reason, status)
+   VALUES (...);
+   ```
+
+8. **Return enriched matches**: Joins matches with full profile data for display
+
+**Key Features**:
+- Two-tier filtering reduces LLM input size and cost
+- Respects mutual preferences (bidirectional filtering)
+- Validates LLM output to prevent malformed responses
+- Replaces old pending matches (can be modified to keep history)
+- Returns immediately usable data for frontend
+
+### 3. Shared utilities (✅ Implemented)
+**Location**: `/supabase/functions/shared/`
+
+- `supabaseClient.ts`: Creates Supabase client with service role key
+- `openaiClient.ts`: OpenAI API client configuration
+- `types.ts`: Shared TypeScript types across edge functions
+
+## Current Status & Next Steps
+
+### ✅ Implemented Features:
+- CV extraction and parsing via OpenAI Assistants API
+- Automatic profile summary generation during onboarding
+- Rule-based candidate filtering
+- LLM-based match scoring and ranking
+- Match storage with scores and personalized reasons
+- Dashboard UI with recommendation generation
+- Match display cards with contact buttons (email/LinkedIn)
+- Row-Level Security (RLS) policies on all tables
+
+### 🚧 Partially Implemented:
+- Match interactions tracking (infrastructure exists, analytics not built)
+- Email logging table (exists but not actively used)
+
+### 📋 Planned Features:
+- **Weekly Cron Job**: Automated batch processing for users with `send_weekly_updates = true`
+- **Email Notifications**: Send match recommendations via email with personalized templates
+- **Accept/Decline Workflow**: Allow users to accept or decline matches with status updates
+- **Match Expiry Logic**: Automatically expire matches after a certain period
+- **Match Analytics**: Track match success rates, user engagement, connection outcomes
+- **Advanced Filtering**: Allow users to refine preferences (e.g., graduation year ranges, specific companies)
+- **Connection Tracking**: Monitor which matches led to successful connections
 
 ---
 
@@ -135,22 +414,23 @@ src/
 │   │   ├── services/          # Profile service
 │   │   └── types.ts
 │   │
-│   ├── matching/              # NEW - Matching feature (planned)
+│   ├── matching/              # ✅ IMPLEMENTED - Matching feature
 │   │   ├── components/
-│   │   │   ├── MatchCard.tsx
-│   │   │   ├── MatchList.tsx
-│   │   │   └── MatchFilters.tsx
+│   │   │   ├── MatchCard.tsx              # ✅ Implemented
+│   │   │   ├── MatchList.tsx              # Placeholder
+│   │   │   └── MatchFilters.tsx           # Placeholder
 │   │   ├── pages/
-│   │   │   ├── Dashboard.tsx
-│   │   │   └── Matches.tsx
-│   │   ├── hooks/             # useMatches, useMatchFilters
-│   │   ├── services/          # Matching business logic
-│   │   │   ├── matchingService.ts      # Rule-based filtering
-│   │   │   ├── scoringService.ts       # LLM-based scoring
-│   │   │   └── profileSummaryService.ts
+│   │   │   ├── Dashboard.tsx              # ✅ Implemented (recommendations UI)
+│   │   │   └── Matches.tsx                # Placeholder (mock data)
+│   │   ├── hooks/
+│   │   │   ├── useMatches.ts              # ✅ Implemented
+│   │   │   └── useGenerateRecommendations.ts  # ✅ Implemented
+│   │   ├── services/
+│   │   │   ├── matchingService.ts         # ✅ Implemented
+│   │   │   └── matchRepository.ts         # ✅ Implemented
 │   │   └── types.ts
 │   │
-│   ├── notifications/         # NEW - Email/notification feature (planned)
+│   ├── notifications/         # 📋 PLANNED - Email/notification feature
 │   │   ├── components/
 │   │   ├── hooks/
 │   │   ├── services/
@@ -158,7 +438,7 @@ src/
 │   │   │   └── templateService.ts
 │   │   └── types.ts
 │   │
-│   └── analytics/             # NEW - Future analytics feature
+│   └── analytics/             # 📋 PLANNED - Future analytics feature
 │       ├── components/
 │       ├── hooks/
 │       ├── services/
@@ -206,33 +486,38 @@ src/
 
 supabase/
 ├── functions/                 # Edge Functions (Deno)
-│   ├── extract-cv-data/      # CV extraction
-│   │   ├── index.ts
-│   │   └── types.ts
+│   ├── extract-cv-data/      # ✅ IMPLEMENTED - CV extraction + profile summary
+│   │   └── index.ts          # Extracts CV data & generates profile summaries
 │   │
-│   ├── generate-matches/      # NEW - Weekly matching cron
+│   ├── generate-recommendations/  # ✅ IMPLEMENTED - On-demand matching
+│   │   └── index.ts          # Rule-based filtering + GPT-4o scoring
+│   │
+│   ├── generate-matches/      # 📋 PLANNED - Weekly matching cron job
 │   │   ├── index.ts
 │   │   ├── matching/
-│   │   │   ├── filters.ts    # Rule-based filtering
-│   │   │   ├── scoring.ts    # LLM-based scoring
-│   │   │   └── ranking.ts    # Match ranking
-│   │   ├── profile/
-│   │   │   └── summaryGenerator.ts
+│   │   │   ├── filters.ts
+│   │   │   └── scoring.ts
 │   │   └── types.ts
 │   │
-│   ├── send-match-emails/     # NEW - Email generation and sending
+│   ├── send-match-emails/     # 📋 PLANNED - Email generation and sending
 │   │   ├── index.ts
 │   │   ├── templates/
 │   │   │   └── matchIntroduction.ts
 │   │   └── types.ts
 │   │
-│   └── shared/               # Shared utilities for edge functions
+│   └── shared/               # ✅ Shared utilities for edge functions
 │       ├── supabaseClient.ts
 │       ├── openaiClient.ts
 │       └── types.ts
 │
 └── migrations/               # Database migrations
-    └── [timestamp]_*.sql
+    ├── 20240101000000_create_profiles_table.sql
+    ├── 20240101000001_create_cv_storage_bucket.sql
+    ├── 20240102000000_fix_profile_trigger.sql
+    ├── 20240103000000_update_profiles_table.sql
+    ├── 20250119000000_create_matching_tables.sql          # ✅ Implemented
+    ├── 20250119100000_recreate_profile_summaries.sql     # ✅ Implemented
+    └── 20250120000000_add_work_history_to_profiles.sql   # ✅ Implemented
 ```
 
 ### Layer Responsibilities
@@ -540,34 +825,34 @@ serve(async (req) => {
 });
 ```
 
-### Database Schema Extensions
+### Implemented Database Schema
 
-To support the matching feature, additional tables are recommended:
+The matching feature is supported by the following tables (✅ implemented):
 
 ```sql
--- Profile summaries (generated by LLM)
+-- Profile summaries (generated during CV extraction)
 CREATE TABLE profile_summaries (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES profiles(user_id) ON DELETE CASCADE,
+  user_id UUID UNIQUE REFERENCES profiles(user_id) ON DELETE CASCADE,
   summary_json JSONB NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Matches
+-- Matches (stores top 3 recommendations per user)
 CREATE TABLE matches (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES profiles(user_id) ON DELETE CASCADE,
   matched_user_id UUID REFERENCES profiles(user_id) ON DELETE CASCADE,
-  score DECIMAL(3,2) NOT NULL,  -- 0.00 to 1.00
-  reason TEXT,                   -- LLM explanation
+  score DECIMAL(3,2) NOT NULL,  -- 0.00 to 1.00 compatibility score
+  reason TEXT,                   -- Personalized LLM-generated explanation
   status TEXT DEFAULT 'pending', -- pending, accepted, declined, expired
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   expires_at TIMESTAMP WITH TIME ZONE,
   UNIQUE(user_id, matched_user_id)
 );
 
--- Match interactions (for analytics)
+-- Match interactions (infrastructure for future analytics)
 CREATE TABLE match_interactions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   match_id UUID REFERENCES matches(id) ON DELETE CASCADE,
@@ -575,7 +860,7 @@ CREATE TABLE match_interactions (
   interaction_date TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Email logs
+-- Email logs (infrastructure for future email notifications)
 CREATE TABLE email_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES profiles(user_id) ON DELETE CASCADE,
@@ -584,6 +869,8 @@ CREATE TABLE email_logs (
   status TEXT DEFAULT 'sent'     -- sent, failed, bounced
 );
 ```
+
+**Row-Level Security (RLS)**: All tables have RLS policies ensuring users can only access their own data.
 
 ### Security & Performance Considerations
 
@@ -656,29 +943,37 @@ describe('User can view matches', () => {
 });
 ```
 
-### Migration Path
+### Implementation Progress
 
-To migrate from the current structure to this architecture:
+The application has been developed following the layered, feature-based architecture:
 
-1. **Phase 1: Create Infrastructure Layer** (Week 1)
-   - Create repository interfaces and implementations
-   - Abstract Supabase calls behind repositories
-   - No UI changes, just refactoring
+1. **✅ Phase 1: Infrastructure Layer** (Completed)
+   - Repository pattern implemented (ProfileRepository, MatchRepository)
+   - Supabase calls abstracted behind repository interfaces
+   - Shared API clients (supabaseClient, openaiClient)
 
-2. **Phase 2: Introduce Service Layer** (Week 2)
-   - Create service classes for each feature
-   - Move business logic from components to services
-   - Update components to use services via hooks
+2. **✅ Phase 2: Service Layer** (Completed)
+   - Service classes created for each feature
+   - Business logic separated from components (MatchingService, ProfileService)
+   - Components consume services via custom hooks
 
-3. **Phase 3: Feature-Based Organization** (Week 3)
-   - Create feature folders
-   - Move components, hooks, and services into features
-   - Update imports across the application
+3. **✅ Phase 3: Feature-Based Organization** (Completed)
+   - Feature folders structured: auth/, onboarding/, profile/, matching/
+   - Components, hooks, and services co-located by feature
+   - Clear separation of concerns across layers
 
-4. **Phase 4: Add New Features** (Week 4+)
-   - Implement matching feature using new architecture
-   - Add profile summary generation
-   - Implement email notifications
+4. **✅ Phase 4: Core Matching Feature** (Completed)
+   - Profile summary generation (automatic during onboarding)
+   - On-demand match generation via edge function
+   - LLM-based scoring with GPT-4o
+   - Dashboard UI with MatchCard components
+   - Contact buttons (email/LinkedIn)
+
+5. **📋 Phase 5: Automation & Notifications** (Planned)
+   - Weekly cron job for batch processing
+   - Email notification system
+   - Accept/decline workflow
+   - Match analytics and insights
 
 ### Benefits of This Architecture
 
