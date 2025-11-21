@@ -1,79 +1,55 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardHeader } from "@/components/layout";
 import { MatchCard } from "../components/MatchCard";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tag } from "@/components/common";
-import { Edit, Search } from "lucide-react";
+import { Edit, Sparkles, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/features/auth";
 import { useProfile, useProfileService } from "@/features/profile";
+import { useMatches, useGenerateRecommendations } from "../hooks/useMatches";
+import { toast } from "sonner";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { data: profile, isLoading: loading } = useProfile(user?.id);
+  const { data: profile, isLoading: profileLoading } = useProfile(user?.id);
+  const { data: matches, isLoading: matchesLoading, refetch } = useMatches(user?.id);
+  const generateRecommendations = useGenerateRecommendations();
   const profileService = useProfileService();
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Get first name from profile
   const firstName = profile?.first_name || user?.email?.split("@")[0] || "there";
-
-  const allMatches = [
-    {
-      name: "Sarah Johnson",
-      title: "MBA '22 | Investment Banking at Goldman Sachs",
-      tags: ["Finance", "MBA"],
-      sentDate: "Jan 15, 2024",
-      email: "sarah.j@example.com",
-      linkedin: "https://linkedin.com",
-    },
-    {
-      name: "Michael Chen",
-      title: "MiF '23 | Private Equity Analyst",
-      tags: ["Finance", "Private Equity"],
-      sentDate: "Jan 15, 2024",
-      email: "michael.c@example.com",
-      linkedin: "https://linkedin.com",
-    },
-    {
-      name: "Emma Williams",
-      title: "MBA '21 | Senior Consultant at McKinsey",
-      tags: ["Consulting", "MBA"],
-      sentDate: "Jan 15, 2024",
-      email: "emma.w@example.com",
-      linkedin: "https://linkedin.com",
-    },
-    {
-      name: "David Park",
-      title: "MiM '23 | Product Manager at Google",
-      tags: ["Technology", "Product"],
-      sentDate: "Jan 8, 2024",
-      email: "david.p@example.com",
-      linkedin: "https://linkedin.com",
-    },
-    {
-      name: "Lisa Anderson",
-      title: "MBA '20 | Partner at Bain & Company",
-      tags: ["Consulting", "Strategy"],
-      sentDate: "Jan 8, 2024",
-      email: "lisa.a@example.com",
-      linkedin: "https://linkedin.com",
-    },
-    {
-      name: "James Wright",
-      title: "EMBA '21 | VP of Operations at Amazon",
-      tags: ["Technology", "Operations"],
-      sentDate: "Jan 1, 2024",
-      email: "james.w@example.com",
-      linkedin: "https://linkedin.com",
-    },
-  ];
 
   const handleUpdateStatus = () => {
     navigate("/update-status");
   };
 
-  if (loading) {
+  const handleGenerateRecommendations = async () => {
+    if (!user?.id) {
+      toast.error("User not found");
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      await generateRecommendations.mutateAsync(user.id);
+      toast.success("Recommendations generated successfully!");
+      await refetch();
+    } catch (error) {
+      console.error("Error generating recommendations:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to generate recommendations"
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  if (profileLoading) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <DashboardHeader />
@@ -87,7 +63,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <DashboardHeader />
-      
+
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Section 1: My Profile */}
         <div className="mb-16">
@@ -142,26 +118,47 @@ const Dashboard = () => {
 
         {/* Section 2: My Matches */}
         <div>
-          {/* Search and Filters */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-8">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search matches by name or industry..."
-                className="pl-10"
-              />
-            </div>
-            <Button variant="outline">
-              Filter
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-2xl font-bold text-foreground">Your Recommended Connections</h2>
+            <Button
+              onClick={handleGenerateRecommendations}
+              disabled={isGenerating || matchesLoading}
+              className="gap-2"
+            >
+              <Sparkles className="h-4 w-4" />
+              {isGenerating ? "Generating..." : "Generate Recommendations"}
             </Button>
           </div>
 
-          {/* Matches Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {allMatches.map((match, index) => (
-              <MatchCard key={index} {...match} />
-            ))}
-          </div>
+          {matchesLoading ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">Loading matches...</p>
+            </div>
+          ) : matches && matches.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {matches.map((match) => (
+                <MatchCard
+                  key={match.id}
+                  firstName={match.matched_profile.first_name}
+                  lastName={match.matched_profile.last_name}
+                  email={match.matched_profile.email}
+                  linkedin={match.matched_profile.linkedin_url}
+                  role={match.matched_profile.current_role}
+                  lbsProgram={match.matched_profile.lbs_program}
+                  graduationYear={match.matched_profile.graduation_year}
+                  reason={match.reason}
+                  score={match.score}
+                />
+              ))}
+            </div>
+          ) : (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                No matches found yet. Click "Generate Recommendations" to find compatible connections based on your profile and interests.
+              </AlertDescription>
+            </Alert>
+          )}
         </div>
       </main>
     </div>

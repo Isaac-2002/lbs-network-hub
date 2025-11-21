@@ -1,52 +1,24 @@
-## Tasks
+Create a recommendation function that analyzes user profile summaries and suggests 3 compatible contacts.
 
-### 1. Consent Page: Replace Checkmarks with Circle Selectors
+**Input:** Current user's profile summary
+**Process:** Compare against all other user profile summaries in the database
+**Output:** 3 recommended contacts
 
-Replace the checkmark UI in the consent page with the same circle selector style used in the "your networking goal" section. This will provide consistent visual feedback for selected options.
+**Matching logic:**
+- Find users with common backgrounds, interests, experiences, or industries
+- Respect all matching preferences (e.g., if someone opts out of student matches, don't recommend them to students)
+- Only recommend users who are open to being contacted
 
-**Apply to:** Both student and alumni consent pages
+**Display in dashboard:**
+For each recommended contact, show:
+- Name
+- Industry
+- Email address
+- LinkedIn URL
+- Why you should contact them
 
-### 2. Industry Selection: Hierarchical Structure with Sub-Sectors
 
-**Requirements:**
-- Display 4 primary industries: **Finance**, **Consulting**, **Tech**, **Diversified**
-- When a primary industry is clicked, reveal its sub-sectors (if applicable)
-- Consulting has no sub-sectors and should be directly selectable
-- **Database storage:** Save to `target_industries` column in `profiles` table
-- **Format:** `Primary: Sub-sector 1, Sub-sector 2`
-  - Example: `Finance: Asset Management, Private Equity`
-  - Example: `Consulting` (no sub-sectors)
+If you don't find any relevant match, just say no matches were found. 
 
-**Industry Hierarchy:**
+## Task: before implementing the function, let me know if I need to have to clarify any aspects
 
-### **Finance**
-- Asset Management
-- Commodity Trading
-- Family Offices
-- Hedge Funds
-- Impact Investing
-- Investment Banking
-- Private Equity
-- Private Wealth Management
-- Real Estate
-- Retail / Commercial Banking
-- Sovereign Wealth Funds
-
-### **Consulting**
-*(No sub-sectors - directly selectable)*
-
-### **Tech**
-- ClimateTech
-- FinTech
-- HealthTech
-- Technology, Media & Telecoms
-- Venture Capital
-
-### **Diversified**
-- Climate and Sustainability
-- Consumer Goods
-- Energy
-- Healthcare
-- Industrials
-- Retail & Luxury
-- Social Impact
