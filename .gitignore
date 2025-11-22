@@ -31,3 +31,8 @@ dist-ssr
 # Claude AI files
 .claude/settings.local.json
 .mcp.json
+
+# Supabase
+supabase/.temp/
+supabase/.branches/
+supabase/config.toml
