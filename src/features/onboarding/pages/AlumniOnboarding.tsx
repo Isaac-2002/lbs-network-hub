@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Header } from "@/components/layout";
-import { ProgressBar, FileUpload, Tag } from "@/components/common";
+import { ProgressBar, FileUpload, Tag, LoadingOverlay } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -128,32 +128,39 @@ const AlumniOnboarding = () => {
         throw new Error(`Failed to save profile: ${profileError.message}`);
       }
 
-      // 3. Trigger CV extraction (async - doesn't block onboarding completion)
+      // 3. Extract CV data and generate profile summary (wait for completion)
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        // Call edge function to extract CV data
-        supabase.functions
-          .invoke("extract-cv-data", {
-            body: {
-              userId: user.id,
-              cvPath: filePath,
-            },
-          })
-          .then(({ error: extractError }) => {
-            if (extractError) {
-              console.error("CV extraction error:", extractError);
-            } else {
-              console.log("CV extraction started successfully");
-            }
-          });
+      if (!session?.access_token) {
+        throw new Error("No active session found. Please try logging in again.");
       }
+
+      console.log("Starting CV extraction and profile summary generation...");
+
+      // Call edge function to extract CV data - AWAIT this to ensure completion
+      const { data: extractResult, error: extractError } = await supabase.functions.invoke("extract-cv-data", {
+        body: {
+          userId: user.id,
+          cvPath: filePath,
+        },
+      });
+
+      if (extractError) {
+        console.error("CV extraction error:", extractError);
+        throw new Error(`CV extraction failed: ${extractError.message}`);
+      }
+
+      if (!extractResult?.success) {
+        throw new Error("CV extraction did not complete successfully");
+      }
+
+      console.log("CV extraction and profile summary completed successfully");
 
       // 4. Store user type for dashboard
       localStorage.setItem("userType", "alumni");
 
       toast({
         title: "Success!",
-        description: "Your profile has been created. We're extracting data from your CV in the background.",
+        description: "Your profile has been created and CV data has been extracted.",
       });
 
       navigate("/dashboard");
@@ -268,6 +275,18 @@ const AlumniOnboarding = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      <LoadingOverlay
+        isVisible={isSubmitting}
+        title="Setting up your profile..."
+        messages={[
+          "Uploading your CV...",
+          "Extracting your information with AI...",
+          "Analyzing your experience and education...",
+          "Building your professional summary...",
+          "Preparing your matches...",
+          "Almost ready!"
+        ]}
+      />
       <Header showAuth={false} />
       
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -524,7 +543,7 @@ const AlumniOnboarding = () => {
               style={currentStep === STEPS.length - 1 ? { backgroundColor: "hsl(var(--accent))" } : {}}
             >
               {isSubmitting
-                ? "Saving..."
+                ? "Processing CV... Please wait"
                 : currentStep === STEPS.length - 1
                 ? "Complete Setup"
                 : "Next"}

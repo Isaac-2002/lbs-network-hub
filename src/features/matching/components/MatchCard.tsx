@@ -1,4 +1,5 @@
-import { Mail, Linkedin, User } from "lucide-react";
+import { Mail, User } from "lucide-react";
+import { LinkedinIcon } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,11 +9,9 @@ interface MatchCardProps {
   lastName: string;
   email: string;
   linkedin: string | null;
-  role: string | null;
   lbsProgram: string | null;
   graduationYear: number | null;
-  reason: string;
-  score?: number;
+  reason: string | null;
 }
 
 export const MatchCard = ({
@@ -20,11 +19,9 @@ export const MatchCard = ({
   lastName,
   email,
   linkedin,
-  role,
   lbsProgram,
   graduationYear,
   reason,
-  score
 }: MatchCardProps) => {
   const fullName = `${firstName} ${lastName}`;
   const programInfo = lbsProgram && graduationYear
@@ -40,42 +37,30 @@ export const MatchCard = ({
             <User className="h-8 w-8 text-background" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-lg text-foreground mb-1">{fullName}</h3>
-            <p className="text-sm text-muted-foreground mb-2">
-              {role || "LBS Network Member"}
-            </p>
+            <h3 className="font-bold text-lg text-foreground mb-2">{fullName}</h3>
             <Badge variant="secondary" className="text-xs">
               {programInfo}
             </Badge>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="relative space-y-4">
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground mb-1">Why connect:</p>
-          <p className="text-sm text-foreground leading-relaxed">{reason}</p>
-        </div>
-
-        <div className="flex items-center justify-between pt-2 border-t">
-          {score !== undefined && (
-            <Badge variant="outline" className="text-xs">
-              Match: {(score * 100).toFixed(0)}%
-            </Badge>
-          )}
-          <div className="flex gap-2 ml-auto">
+      <CardContent className="relative space-y-3">
+        {reason && (
+          <p className="text-sm text-muted-foreground italic">{reason}</p>
+        )}
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" asChild>
+            <a href={`mailto:${email}`} title="Send email">
+              <Mail className="h-4 w-4" />
+            </a>
+          </Button>
+          {linkedin && (
             <Button size="sm" variant="outline" asChild>
-              <a href={`mailto:${email}`} title="Send email">
-                <Mail className="h-4 w-4" />
+              <a href={linkedin} target="_blank" rel="noopener noreferrer" title="View LinkedIn profile">
+                <LinkedinIcon className="h-4 w-4" />
               </a>
             </Button>
-            {linkedin && (
-              <Button size="sm" variant="outline" asChild>
-                <a href={linkedin} target="_blank" rel="noopener noreferrer" title="View LinkedIn profile">
-                  <Linkedin className="h-4 w-4" />
-                </a>
-              </Button>
-            )}
-          </div>
+          )}
         </div>
       </CardContent>
     </Card>

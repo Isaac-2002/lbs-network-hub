@@ -4,9 +4,19 @@
       "Bash(tree:*)",
       "Bash(npm run build)",
       "Bash(claude --dangerously-skip-permissions)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__list_edge_functions",
+      "mcp__supabase__get_logs",
+      "Bash(supabase functions deploy:*)",
+      "Bash(supabase secrets set:*)",
+      "Bash(supabase secrets list:*)"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }

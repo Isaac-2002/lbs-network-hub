@@ -248,7 +248,7 @@ Analyze the user profile against all candidates and select the TOP 3 BEST MATCHE
 
 For each of the top 3 matches, provide:
 - A compatibility score (0.0 to 1.0, where 1.0 is perfect match)
-- A personalized reason (2-3 sentences) explaining WHY this person would be a valuable connection
+- A SHORT reason (1 concise sentence, max 15 words) explaining the key match factor
 
 Return ONLY valid JSON in this exact format, no additional text:
 {
@@ -256,12 +256,12 @@ Return ONLY valid JSON in this exact format, no additional text:
     {
       "matched_user_id": "user_id_here",
       "score": 0.95,
-      "reason": "Personalized reason here explaining the match value"
+      "reason": "Short one-sentence reason here"
     }
   ]
 }
 
-IMPORTANT: Return exactly 3 recommendations (or fewer if less than 3 candidates). Sort by score descending.`;
+IMPORTANT: Return exactly 3 recommendations (or fewer if less than 3 candidates). Sort by score descending. Keep reasons concise.`;
 
     console.log("Sending request to OpenAI...");
 
@@ -276,7 +276,7 @@ IMPORTANT: Return exactly 3 recommendations (or fewer if less than 3 candidates)
         messages: [
           {
             role: "system",
-            content: "You are a professional networking matchmaker. Analyze profiles and provide thoughtful, personalized match recommendations.",
+            content: "You are a professional networking matchmaker. Analyze profiles and provide compatibility scores with concise reasons.",
           },
           {
             role: "user",
@@ -284,7 +284,7 @@ IMPORTANT: Return exactly 3 recommendations (or fewer if less than 3 candidates)
           },
         ],
         temperature: 0.7,
-        max_tokens: 2000,
+        max_tokens: 800,
       }),
     });
 
@@ -356,6 +356,42 @@ IMPORTANT: Return exactly 3 recommendations (or fewer if less than 3 candidates)
 
     if (fetchError) {
       throw new Error(`Failed to fetch complete matches: ${fetchError.message}`);
+    }
+
+    // 8. Send email notification with matches
+    if (completeMatches && completeMatches.length > 0) {
+      try {
+        console.log("Triggering email notification...");
+
+        const emailMatches = completeMatches.map(match => ({
+          matched_user_id: match.matched_user_id,
+          first_name: match.matched_profile.first_name,
+          last_name: match.matched_profile.last_name,
+          lbs_program: match.matched_profile.lbs_program,
+          graduation_year: match.matched_profile.graduation_year,
+          linkedin_url: match.matched_profile.linkedin_url,
+          current_role: match.matched_profile.current_role,
+          reason: match.reason,
+          networking_goal: null, // Will be fetched in email function if needed
+        }));
+
+        const emailResponse = await supabase.functions.invoke("send-match-email", {
+          body: {
+            userId,
+            matches: emailMatches,
+          },
+        });
+
+        if (emailResponse.error) {
+          console.error("Failed to send email:", emailResponse.error);
+          // Don't fail the whole request if email fails
+        } else {
+          console.log("Email notification sent successfully");
+        }
+      } catch (emailError) {
+        console.error("Error sending email notification:", emailError);
+        // Continue even if email fails
+      }
     }
 
     return new Response(
