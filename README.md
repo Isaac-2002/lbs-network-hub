@@ -2,7 +2,7 @@
 
 An AI-powered networking platform connecting London Business School students and alumni based on career interests, industries, and professional goals.
 
-**Repository**: [github.com/Isaac-2002/lbs-network-hub](https://github.com/Isaac-2002/lbs-network-hub)
+**Repository**: https://lbs-network-hub.vercel.app/
 
 ## Overview
 
