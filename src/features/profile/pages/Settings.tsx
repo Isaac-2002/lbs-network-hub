@@ -19,10 +19,12 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/features/auth";
 import { supabase } from "@/lib/api/supabase";
+import { useGenerateRecommendationsAndSendEmail } from "@/features/matching/hooks/useMatches";
 
 const Settings = () => {
   const { toast } = useToast();
   const { user } = useAuth();
+  const generateRecommendationsAndSendEmail = useGenerateRecommendationsAndSendEmail();
   const [weeklyMatchEmails, setWeeklyMatchEmails] = useState(true);
   const [connectWithStudents, setConnectWithStudents] = useState(true);
   const [connectWithAlumni, setConnectWithAlumni] = useState(true);
@@ -97,9 +99,20 @@ const Settings = () => {
         throw error;
       }
 
+      // Regenerate matches since connection preferences changed
+      // This affects the matching pool (who the user can be matched with)
+      console.log("Regenerating matches after preference changes...");
+      try {
+        await generateRecommendationsAndSendEmail.mutateAsync(user.id);
+        console.log("Matches regenerated successfully");
+      } catch (matchError) {
+        console.error("Error regenerating matches:", matchError);
+        // Don't fail the settings save if match generation fails
+      }
+
       toast({
         title: "Settings updated",
-        description: "Your preferences have been saved successfully.",
+        description: "Your preferences have been saved and matches have been updated.",
       });
     } catch (error) {
       console.error("Error saving preferences:", error);

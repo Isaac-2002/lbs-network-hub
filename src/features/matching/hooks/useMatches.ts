@@ -31,6 +31,19 @@ export const useGenerateRecommendations = () => {
   });
 };
 
+export const useGenerateRecommendationsAndSendEmail = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      return await matchingService.generateRecommendationsAndSendEmail(userId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['matches'] });
+    },
+  });
+};
+
 export const useAcceptMatch = () => {
   const queryClient = useQueryClient();
 

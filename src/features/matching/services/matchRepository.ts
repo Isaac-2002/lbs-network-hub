@@ -25,6 +25,7 @@ export interface MatchWithProfile {
 export interface IMatchRepository {
   findMatchesForUser(userId: string, status?: string): Promise<MatchWithProfile[]>;
   generateRecommendations(userId: string): Promise<MatchWithProfile[]>;
+  sendMatchEmail(userId: string, matches: MatchWithProfile[]): Promise<void>;
 }
 
 export class SupabaseMatchRepository implements IMatchRepository {
@@ -79,6 +80,37 @@ export class SupabaseMatchRepository implements IMatchRepository {
     } catch (error) {
       if (error instanceof RepositoryError) throw error;
       throw new RepositoryError('Failed to generate recommendations');
+    }
+  }
+
+  async sendMatchEmail(userId: string, matches: MatchWithProfile[]): Promise<void> {
+    try {
+      // Transform matches to the format expected by the edge function
+      const emailMatches = matches.map(match => ({
+        matched_user_id: match.matched_user_id,
+        first_name: match.matched_profile.first_name,
+        last_name: match.matched_profile.last_name,
+        lbs_program: match.matched_profile.lbs_program,
+        graduation_year: match.matched_profile.graduation_year,
+        linkedin_url: match.matched_profile.linkedin_url,
+        reason: match.reason,
+        current_role: match.matched_profile.current_role,
+        networking_goal: null, // This will be fetched by the edge function
+      }));
+
+      const { error } = await this.supabase.functions.invoke('send-match-email', {
+        body: {
+          userId,
+          matches: emailMatches
+        },
+      });
+
+      if (error) {
+        throw new RepositoryError(error.message);
+      }
+    } catch (error) {
+      if (error instanceof RepositoryError) throw error;
+      throw new RepositoryError('Failed to send match email');
     }
   }
 }

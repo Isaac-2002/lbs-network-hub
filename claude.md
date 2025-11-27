@@ -8,12 +8,12 @@ Networking platform matching London Business School students and alumni based on
 - User authentication and onboarding
 - CV upload and AI-powered data extraction (OpenAI Assistants API)
 - Automatic profile summary generation
-- On-demand match recommendations (GPT-4o)
+- Automated match recommendations (GPT-4o) - triggered on onboarding and profile updates
+- Email notifications with personalized connection messages (GPT-4o-mini)
 - Dashboard with match display and contact functionality
 
 **📋 Planned Features**:
 - Weekly automated match generation (cron job)
-- Email notifications with match recommendations
 - Accept/decline match workflow
 - Match analytics and success tracking
 
@@ -76,16 +76,21 @@ Networking platform matching London Business School students and alumni based on
 3. **Upload CV** (PDF only, max 1MB)
 4. **Fill interests form** (networking goal, target industries, specific interests)
 5. **Set consent preferences** (connect with students/alumni, weekly updates)
-6. **CV Processing**:
+6. **Automated Processing** (during onboarding):
    - Edge function extracts CV data via OpenAI Assistants API
    - Updates profiles table with extracted fields
    - Generates and stores profile summary in profile_summaries table
+   - **Automatically generates top 3 match recommendations**
+   - **Generates personalized LinkedIn cold messages for each match**
+   - **Sends email with matches and suggested messages**
 7. **Dashboard**:
    - View current profile summary
-   - Click "Generate Recommendations" button
-   - Matching algorithm runs (5-15 seconds)
-   - Receive 3 personalized match recommendations
-8. **Connect** with matches via email or LinkedIn
+   - View personalized match recommendations
+   - Access matches via email or LinkedIn
+8. **Profile Updates**:
+   - Update profile via "Update Your Status" button
+   - Matches are automatically regenerated after updates
+   - New email sent with updated recommendations
 
 ## CV Extraction & Profile Summary (Edge Function: extract-cv-data)
 
@@ -130,7 +135,7 @@ After filtering, GPT-4o analyzes all candidate profiles to provide personalized 
 
 **Process Flow**:
 ```
-User clicks "Generate Recommendations"
+User completes onboarding OR updates profile/settings
     ↓
 1. Fetch user profile + summary
 2. Apply rule-based filters → candidate pool
@@ -140,19 +145,26 @@ User clicks "Generate Recommendations"
 6. Parse JSON response (validates format)
 7. Delete old pending matches
 8. Insert new matches with scores + reasons
-9. Return matches with joined profile data
+9. Generate personalized LinkedIn messages (GPT-4o-mini)
+10. Send email with matches and suggested messages
     ↓
-Display 3 MatchCards with contact buttons
+User receives email + Dashboard displays matches
 ```
 
+**Triggers for Automatic Match Generation**:
+- **Initial Onboarding**: After CV extraction completes
+- **Profile Update**: When user re-completes onboarding via "Update Your Status"
+- **Settings Change**: When user updates connection preferences (connect_with_students/alumni)
+
 **Frontend Implementation**:
-- `Dashboard.tsx`: Shows profile summary + "Generate Recommendations" button
+- `Dashboard.tsx`: Shows profile summary and match recommendations (loaded automatically)
 - `MatchCard.tsx`: Displays match with avatar, details, compatibility score, LLM-generated reason, email/LinkedIn buttons
 - `useMatches` hook: Fetches and caches matches via React Query
+- `useGenerateRecommendationsAndSendEmail` hook: Chains match generation + email sending
 - `MatchingService` + `MatchRepository`: Service layer for business logic and data access
 
-**Performance**: 5-15 seconds per generation
-**Cost**: ~$0.02-0.05 per recommendation request
+**Performance**: 10-20 seconds per generation (including email)
+**Cost**: ~$0.03-0.07 per recommendation request (GPT-4o + GPT-4o-mini for cold messages)
 
 ### Profile Summary Structure
 Profile summaries are stored in JSONB format and contain:
@@ -216,7 +228,10 @@ This structured summary enables efficient matching by providing the LLM with con
 ### 2. generate-recommendations (✅ Implemented)
 **Location**: `/supabase/functions/generate-recommendations/index.ts`
 
-**Triggers**: User clicks "Generate Recommendations" button on dashboard
+**Triggers**:
+- Automatically after CV extraction during onboarding
+- After user updates profile via "Update Your Status"
+- After user changes connection preferences in Settings
 
 **Process**:
 1. **Fetch user data**:
@@ -286,7 +301,68 @@ This structured summary enables efficient matching by providing the LLM with con
 - Replaces old pending matches (can be modified to keep history)
 - Returns immediately usable data for frontend
 
-### 3. Shared utilities (✅ Implemented)
+### 3. send-match-email (✅ Implemented)
+**Location**: `/supabase/functions/send-match-email/index.ts`
+
+**Triggers**:
+- Automatically called after match generation completes
+- Sends email immediately with newly generated matches
+
+**Process**:
+1. **Receive match data**:
+   - userId: The user to send matches to
+   - matches: Array of generated matches with profile data
+
+2. **Fetch user profile**:
+   - Get user's name, email, and networking_goal from `profiles` table
+
+3. **Generate personalized LinkedIn messages**:
+   - For each match, call GPT-4o-mini to generate a warm, professional message
+   - Model: gpt-4o-mini
+   - Temperature: 0.8 (creative but professional)
+   - Max tokens: 200 per message
+   - Context includes: sender name, recipient name, match reason, networking goal
+   - Fallback message if API fails
+
+4. **Build email content**:
+   - HTML template with dark theme matching brand
+   - For each match:
+     - Name, LBS program, graduation year
+     - Match reason (LLM-generated explanation)
+     - LinkedIn profile link
+     - Personalized suggested message in highlighted box
+   - Plain text version for email clients
+
+5. **Send email via Resend API**:
+   - From: `LBS Connect <configured-email>`
+   - Subject: "New networking matches found for you!"
+   - Beautiful HTML email with match cards
+   - Returns early if no matches (success=true, no email sent)
+
+6. **Log email**:
+   - Insert record into `email_logs` table
+   - email_type: 'match_notification'
+   - status: 'sent'
+
+**Key Features**:
+- AI-generated personalized cold messages for each match
+- Professional email template with brand styling
+- Graceful fallback if message generation fails
+- Logs all emails for tracking and debugging
+- Handles empty match arrays without sending email
+- Uses Resend API for reliable delivery
+
+**Email Template**:
+- Dark theme (#1a1a1a background, #c1e649 accent)
+- Match cards with profile details
+- Clickable LinkedIn links
+- Suggested messages in highlighted boxes
+- Responsive design for mobile/desktop
+
+**Performance**: 3-5 seconds for 3 matches (includes AI message generation)
+**Cost**: ~$0.01-0.02 per email (GPT-4o-mini for 3 messages)
+
+### 4. Shared utilities (✅ Implemented)
 **Location**: `/supabase/functions/shared/`
 
 - `supabaseClient.ts`: Creates Supabase client with service role key
@@ -299,19 +375,20 @@ This structured summary enables efficient matching by providing the LLM with con
 - CV extraction and parsing via OpenAI Assistants API
 - Automatic profile summary generation during onboarding
 - Rule-based candidate filtering
-- LLM-based match scoring and ranking
+- LLM-based match scoring and ranking (GPT-4o)
 - Match storage with scores and personalized reasons
-- Dashboard UI with recommendation generation
+- **Automated match generation** (triggers: onboarding, profile updates, settings changes)
+- **Email notifications with AI-generated LinkedIn messages** (GPT-4o-mini)
+- Email logging to `email_logs` table
+- Dashboard UI with automatic match display
 - Match display cards with contact buttons (email/LinkedIn)
 - Row-Level Security (RLS) policies on all tables
 
 ### 🚧 Partially Implemented:
 - Match interactions tracking (infrastructure exists, analytics not built)
-- Email logging table (exists but not actively used)
 
 ### 📋 Planned Features:
 - **Weekly Cron Job**: Automated batch processing for users with `send_weekly_updates = true`
-- **Email Notifications**: Send match recommendations via email with personalized templates
 - **Accept/Decline Workflow**: Allow users to accept or decline matches with status updates
 - **Match Expiry Logic**: Automatically expire matches after a certain period
 - **Match Analytics**: Track match success rates, user engagement, connection outcomes
@@ -424,7 +501,8 @@ src/
 │   │   │   └── Matches.tsx                # Placeholder (mock data)
 │   │   ├── hooks/
 │   │   │   ├── useMatches.ts              # ✅ Implemented
-│   │   │   └── useGenerateRecommendations.ts  # ✅ Implemented
+│   │   │   ├── useGenerateRecommendations.ts  # ✅ Implemented
+│   │   │   └── useGenerateRecommendationsAndSendEmail.ts  # ✅ Implemented
 │   │   ├── services/
 │   │   │   ├── matchingService.ts         # ✅ Implemented
 │   │   │   └── matchRepository.ts         # ✅ Implemented
@@ -499,11 +577,8 @@ supabase/
 │   │   │   └── scoring.ts
 │   │   └── types.ts
 │   │
-│   ├── send-match-emails/     # 📋 PLANNED - Email generation and sending
-│   │   ├── index.ts
-│   │   ├── templates/
-│   │   │   └── matchIntroduction.ts
-│   │   └── types.ts
+│   ├── send-match-email/      # ✅ IMPLEMENTED - Email generation and sending
+│   │   └── index.ts           # Generates AI messages and sends via Resend
 │   │
 │   └── shared/               # ✅ Shared utilities for edge functions
 │       ├── supabaseClient.ts

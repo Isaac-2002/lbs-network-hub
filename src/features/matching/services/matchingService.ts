@@ -23,4 +23,16 @@ export class MatchingService {
     // Call the edge function to generate recommendations
     return await this.matchRepository.generateRecommendations(userId);
   }
+
+  async generateRecommendationsAndSendEmail(userId: string): Promise<MatchWithProfile[]> {
+    // Step 1: Generate recommendations
+    const matches = await this.matchRepository.generateRecommendations(userId);
+
+    // Step 2: Send email with the matches (only if matches exist)
+    if (matches.length > 0) {
+      await this.matchRepository.sendMatchEmail(userId, matches);
+    }
+
+    return matches;
+  }
 }

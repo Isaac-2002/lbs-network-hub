@@ -11,6 +11,7 @@ import { useAuth } from "@/features/auth";
 import { supabase } from "@/lib/api/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { INDUSTRIES, formatIndustriesForStorage } from "@/lib/constants/industries";
+import { useGenerateRecommendationsAndSendEmail } from "@/features/matching/hooks/useMatches";
 
 const STEPS = ["Upload CV", "Your Networking Goal", "Consent"];
 
@@ -20,6 +21,7 @@ const StudentOnboarding = () => {
   const isUpdate = searchParams.get("update") === "true";
   const { user, loading } = useAuth();
   const { toast } = useToast();
+  const generateRecommendationsAndSendEmail = useGenerateRecommendationsAndSendEmail();
   const [currentStep, setCurrentStep] = useState(0);
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [networkingGoal, setNetworkingGoal] = useState("");
@@ -155,12 +157,23 @@ const StudentOnboarding = () => {
 
       console.log("CV extraction and profile summary completed successfully");
 
-      // 4. Store user type for dashboard
+      // 4. Generate match recommendations and send email
+      console.log("Generating match recommendations...");
+      try {
+        await generateRecommendationsAndSendEmail.mutateAsync(user.id);
+        console.log("Match recommendations generated and email sent successfully");
+      } catch (matchError) {
+        console.error("Error generating matches:", matchError);
+        // Don't fail the entire onboarding if match generation fails
+        // The user can still access the dashboard
+      }
+
+      // 5. Store user type for dashboard
       localStorage.setItem("userType", "student");
 
       toast({
         title: "Success!",
-        description: "Your profile has been created and CV data has been extracted.",
+        description: "Your profile has been created and matches are ready!",
       });
 
       navigate("/dashboard");
@@ -268,7 +281,9 @@ const StudentOnboarding = () => {
           "Extracting your information with AI...",
           "Analyzing your experience and education...",
           "Building your professional summary...",
-          "Preparing your matches...",
+          "Finding your best matches...",
+          "Generating personalized connection messages...",
+          "Sending your matches via email...",
           "Almost ready!"
         ]}
       />

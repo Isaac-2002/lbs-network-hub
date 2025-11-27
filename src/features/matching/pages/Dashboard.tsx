@@ -1,52 +1,27 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardHeader } from "@/components/layout";
 import { MatchCard } from "../components/MatchCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tag } from "@/components/common";
-import { Edit, Sparkles, AlertCircle } from "lucide-react";
+import { Edit, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/features/auth";
 import { useProfile, useProfileService } from "@/features/profile";
-import { useMatches, useGenerateRecommendations } from "../hooks/useMatches";
-import { toast } from "sonner";
+import { useMatches } from "../hooks/useMatches";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: profile, isLoading: profileLoading } = useProfile(user?.id);
-  const { data: matches, isLoading: matchesLoading, refetch } = useMatches(user?.id);
-  const generateRecommendations = useGenerateRecommendations();
+  const { data: matches, isLoading: matchesLoading } = useMatches(user?.id);
   const profileService = useProfileService();
-  const [isGenerating, setIsGenerating] = useState(false);
 
   // Get first name from profile
   const firstName = profile?.first_name || user?.email?.split("@")[0] || "there";
 
   const handleUpdateStatus = () => {
     navigate("/update-status");
-  };
-
-  const handleGenerateRecommendations = async () => {
-    if (!user?.id) {
-      toast.error("User not found");
-      return;
-    }
-
-    setIsGenerating(true);
-    try {
-      await generateRecommendations.mutateAsync(user.id);
-      toast.success("Recommendations generated successfully!");
-      await refetch();
-    } catch (error) {
-      console.error("Error generating recommendations:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to generate recommendations"
-      );
-    } finally {
-      setIsGenerating(false);
-    }
   };
 
   if (profileLoading) {
@@ -120,14 +95,6 @@ const Dashboard = () => {
         <div>
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-2xl font-bold text-foreground">Your Recommended Connections</h2>
-            <Button
-              onClick={handleGenerateRecommendations}
-              disabled={isGenerating || matchesLoading}
-              className="gap-2"
-            >
-              <Sparkles className="h-4 w-4" />
-              {isGenerating ? "Generating..." : "Generate Recommendations"}
-            </Button>
           </div>
 
           {matchesLoading ? (
@@ -155,7 +122,7 @@ const Dashboard = () => {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                No matches found yet. Click "Generate Recommendations" to find compatible connections based on your profile and interests.
+                No relevant matches were found at this time. We'll keep looking and notify you when we find compatible connections. You can also update your profile to improve match quality.
               </AlertDescription>
             </Alert>
           )}
